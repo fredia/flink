@@ -83,6 +83,7 @@ under the License.
 		<module>flink-end-to-end-tests-elasticsearch7</module>
 		<module>flink-end-to-end-tests-common-elasticsearch</module>
 		<module>flink-end-to-end-tests-sql</module>
+		<module>flink-incremental-checkpoints-test</module>
 	</modules>
 
 	<dependencyManagement>
