@@ -22,6 +22,7 @@ import org.apache.flink.api.common.operators.MailboxExecutor;
 import org.apache.flink.api.java.tuple.Tuple2;
 import org.apache.flink.changelog.fs.StateChangeUploadScheduler.UploadTask;
 import org.apache.flink.runtime.state.KeyGroupRange;
+import org.apache.flink.runtime.state.LocalRecoveryConfig;
 import org.apache.flink.runtime.state.StreamStateHandle;
 import org.apache.flink.runtime.state.changelog.ChangelogStateHandleStreamImpl;
 import org.apache.flink.runtime.state.changelog.SequenceNumber;
@@ -32,6 +33,7 @@ import org.apache.flink.runtime.state.changelog.StateChangelogWriter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import javax.annotation.concurrent.NotThreadSafe;
 
@@ -139,19 +141,24 @@ class FsStateChangelogWriter implements StateChangelogWriter<ChangelogStateHandl
 
     private final TaskChangelogRegistry changelogRegistry;
 
+    /** The configuration for local recovery. */
+    @Nonnull private final LocalRecoveryConfig localRecoveryConfig;
+
     FsStateChangelogWriter(
             UUID logId,
             KeyGroupRange keyGroupRange,
             StateChangeUploadScheduler uploader,
             long preEmptivePersistThresholdInBytes,
             MailboxExecutor mailboxExecutor,
-            TaskChangelogRegistry changelogRegistry) {
+            TaskChangelogRegistry changelogRegistry,
+            LocalRecoveryConfig localRecoveryConfig) {
         this.logId = logId;
         this.keyGroupRange = keyGroupRange;
         this.uploader = uploader;
         this.preEmptivePersistThresholdInBytes = preEmptivePersistThresholdInBytes;
         this.mailboxExecutor = mailboxExecutor;
         this.changelogRegistry = changelogRegistry;
+        this.localRecoveryConfig = localRecoveryConfig;
     }
 
     @Override

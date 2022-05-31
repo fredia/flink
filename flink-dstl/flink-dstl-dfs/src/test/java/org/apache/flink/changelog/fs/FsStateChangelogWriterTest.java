@@ -19,6 +19,7 @@ package org.apache.flink.changelog.fs;
 
 import org.apache.flink.runtime.mailbox.SyncMailboxExecutor;
 import org.apache.flink.runtime.state.KeyGroupRange;
+import org.apache.flink.runtime.state.TestLocalRecoveryConfig;
 import org.apache.flink.runtime.state.changelog.ChangelogStateHandleStreamImpl;
 import org.apache.flink.runtime.state.changelog.SequenceNumber;
 import org.apache.flink.util.function.BiConsumerWithException;
@@ -225,7 +226,8 @@ class FsStateChangelogWriterTest {
                         StateChangeUploadScheduler.directScheduler(uploader),
                         appendPersistThreshold,
                         new SyncMailboxExecutor(),
-                        TaskChangelogRegistry.NO_OP)) {
+                        TaskChangelogRegistry.NO_OP,
+                        TestLocalRecoveryConfig.disabled())) {
             test.accept(writer, uploader);
         }
     }

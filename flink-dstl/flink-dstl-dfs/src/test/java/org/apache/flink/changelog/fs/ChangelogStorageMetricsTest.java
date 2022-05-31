@@ -26,6 +26,7 @@ import org.apache.flink.metrics.HistogramStatistics;
 import org.apache.flink.runtime.mailbox.SyncMailboxExecutor;
 import org.apache.flink.runtime.metrics.groups.TaskManagerJobMetricGroup;
 import org.apache.flink.runtime.metrics.util.TestingMetricRegistry;
+import org.apache.flink.runtime.state.TestLocalRecoveryConfig;
 import org.apache.flink.runtime.state.changelog.SequenceNumber;
 import org.apache.flink.runtime.state.testutils.EmptyStreamStateHandle;
 
@@ -69,7 +70,8 @@ public class ChangelogStorageMetricsTest {
                         false,
                         100,
                         metrics,
-                        TaskChangelogRegistry.NO_OP)) {
+                        TaskChangelogRegistry.NO_OP,
+                        TestLocalRecoveryConfig.disabled())) {
             FsStateChangelogWriter writer = createWriter(storage);
             int numUploads = 5;
             for (int i = 0; i < numUploads; i++) {
@@ -94,7 +96,8 @@ public class ChangelogStorageMetricsTest {
                         false,
                         100,
                         metrics,
-                        TaskChangelogRegistry.NO_OP)) {
+                        TaskChangelogRegistry.NO_OP,
+                        TestLocalRecoveryConfig.disabled())) {
             FsStateChangelogWriter writer = createWriter(storage);
 
             // upload single byte to infer header size
@@ -127,7 +130,8 @@ public class ChangelogStorageMetricsTest {
                         false,
                         100,
                         metrics,
-                        TaskChangelogRegistry.NO_OP)) {
+                        TaskChangelogRegistry.NO_OP,
+                        TestLocalRecoveryConfig.disabled())) {
             FsStateChangelogWriter writer = createWriter(storage);
 
             int numUploads = 5;
@@ -178,7 +182,10 @@ public class ChangelogStorageMetricsTest {
 
         FsStateChangelogStorage storage =
                 new FsStateChangelogStorage(
-                        batcher, Integer.MAX_VALUE, TaskChangelogRegistry.NO_OP);
+                        batcher,
+                        Integer.MAX_VALUE,
+                        TaskChangelogRegistry.NO_OP,
+                        TestLocalRecoveryConfig.disabled());
         FsStateChangelogWriter[] writers = new FsStateChangelogWriter[numWriters];
         for (int i = 0; i < numWriters; i++) {
             writers[i] =
@@ -230,7 +237,10 @@ public class ChangelogStorageMetricsTest {
 
         FsStateChangelogStorage storage =
                 new FsStateChangelogStorage(
-                        batcher, Integer.MAX_VALUE, TaskChangelogRegistry.NO_OP);
+                        batcher,
+                        Integer.MAX_VALUE,
+                        TaskChangelogRegistry.NO_OP,
+                        TestLocalRecoveryConfig.disabled());
         FsStateChangelogWriter writer = createWriter(storage);
 
         try {
@@ -272,7 +282,10 @@ public class ChangelogStorageMetricsTest {
 
         FsStateChangelogStorage storage =
                 new FsStateChangelogStorage(
-                        batcher, Integer.MAX_VALUE, TaskChangelogRegistry.NO_OP);
+                        batcher,
+                        Integer.MAX_VALUE,
+                        TaskChangelogRegistry.NO_OP,
+                        TestLocalRecoveryConfig.disabled());
         FsStateChangelogWriter writer = createWriter(storage);
 
         try {
@@ -335,7 +348,11 @@ public class ChangelogStorageMetricsTest {
                                 metrics.getTotalAttemptsPerUpload()),
                         metrics);
         try (FsStateChangelogStorage storage =
-                new FsStateChangelogStorage(batcher, Long.MAX_VALUE, TaskChangelogRegistry.NO_OP)) {
+                new FsStateChangelogStorage(
+                        batcher,
+                        Long.MAX_VALUE,
+                        TaskChangelogRegistry.NO_OP,
+                        TestLocalRecoveryConfig.disabled())) {
             FsStateChangelogWriter writer = createWriter(storage);
             int numUploads = 11;
             for (int i = 0; i < numUploads; i++) {

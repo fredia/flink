@@ -26,12 +26,14 @@ import org.apache.flink.core.fs.Path;
 import org.apache.flink.runtime.io.AvailabilityProvider;
 import org.apache.flink.runtime.metrics.groups.TaskManagerJobMetricGroup;
 import org.apache.flink.runtime.state.KeyGroupRange;
+import org.apache.flink.runtime.state.LocalRecoveryConfig;
 import org.apache.flink.runtime.state.changelog.ChangelogStateHandleStreamImpl;
 import org.apache.flink.runtime.state.changelog.StateChangelogStorage;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.annotation.Nonnull;
 import javax.annotation.concurrent.ThreadSafe;
 
 import java.io.IOException;
@@ -61,18 +63,29 @@ public class FsStateChangelogStorage extends FsStateChangelogStorageForRecovery
     private final AtomicInteger logIdGenerator = new AtomicInteger(0);
 
     private final TaskChangelogRegistry changelogRegistry;
+    /** The configuration for local recovery. */
+    @Nonnull private final LocalRecoveryConfig localRecoveryConfig;
 
     public FsStateChangelogStorage(
-            JobID jobID, Configuration config, TaskManagerJobMetricGroup metricGroup)
+            JobID jobID,
+            Configuration config,
+            TaskManagerJobMetricGroup metricGroup,
+            LocalRecoveryConfig localRecoveryConfig)
             throws IOException {
-        this(jobID, config, metricGroup, defaultChangelogRegistry(config.get(NUM_DISCARD_THREADS)));
+        this(
+                jobID,
+                config,
+                metricGroup,
+                defaultChangelogRegistry(config.get(NUM_DISCARD_THREADS)),
+                localRecoveryConfig);
     }
 
     public FsStateChangelogStorage(
             JobID jobID,
             Configuration config,
             TaskManagerJobMetricGroup metricGroup,
-            TaskChangelogRegistry changelogRegistry)
+            TaskChangelogRegistry changelogRegistry,
+            LocalRecoveryConfig localRecoveryConfig)
             throws IOException {
         this(
                 fromConfig(
@@ -81,7 +94,8 @@ public class FsStateChangelogStorage extends FsStateChangelogStorageForRecovery
                         new ChangelogStorageMetricGroup(metricGroup),
                         changelogRegistry),
                 config.get(PREEMPTIVE_PERSIST_THRESHOLD).getBytes(),
-                changelogRegistry);
+                changelogRegistry,
+                localRecoveryConfig);
     }
 
     @VisibleForTesting
@@ -91,7 +105,8 @@ public class FsStateChangelogStorage extends FsStateChangelogStorageForRecovery
             boolean compression,
             int bufferSize,
             ChangelogStorageMetricGroup metricGroup,
-            TaskChangelogRegistry changelogRegistry)
+            TaskChangelogRegistry changelogRegistry,
+            LocalRecoveryConfig localRecoveryConfig)
             throws IOException {
         this(
                 directScheduler(
@@ -104,17 +119,20 @@ public class FsStateChangelogStorage extends FsStateChangelogStorageForRecovery
                                 metricGroup,
                                 changelogRegistry)),
                 PREEMPTIVE_PERSIST_THRESHOLD.defaultValue().getBytes(),
-                changelogRegistry);
+                changelogRegistry,
+                localRecoveryConfig);
     }
 
     @VisibleForTesting
     public FsStateChangelogStorage(
             StateChangeUploadScheduler uploader,
             long preEmptivePersistThresholdInBytes,
-            TaskChangelogRegistry changelogRegistry) {
+            TaskChangelogRegistry changelogRegistry,
+            LocalRecoveryConfig localRecoveryConfig) {
         this.preEmptivePersistThresholdInBytes = preEmptivePersistThresholdInBytes;
         this.changelogRegistry = changelogRegistry;
         this.uploader = uploader;
+        this.localRecoveryConfig = localRecoveryConfig;
     }
 
     @Override
@@ -128,7 +146,8 @@ public class FsStateChangelogStorage extends FsStateChangelogStorageForRecovery
                 uploader,
                 preEmptivePersistThresholdInBytes,
                 mailboxExecutor,
-                changelogRegistry);
+                changelogRegistry,
+                localRecoveryConfig);
     }
 
     @Override
