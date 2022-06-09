@@ -23,6 +23,8 @@ import org.apache.flink.changelog.fs.StateChangeUploadScheduler.UploadTask;
 import org.apache.flink.runtime.state.StreamStateHandle;
 import org.apache.flink.util.Preconditions;
 
+import javax.annotation.Nullable;
+
 import java.io.IOException;
 import java.util.Collection;
 import java.util.List;
@@ -48,11 +50,20 @@ public interface StateChangeUploader extends AutoCloseable {
     final class UploadTasksResult {
         private final Map<UploadTask, Map<StateChangeSet, Long>> tasksOffsets;
         private final StreamStateHandle handle;
+        private final StreamStateHandle localHandle;
 
         public UploadTasksResult(
                 Map<UploadTask, Map<StateChangeSet, Long>> tasksOffsets, StreamStateHandle handle) {
+            this(tasksOffsets, handle, null);
+        }
+
+        public UploadTasksResult(
+                Map<UploadTask, Map<StateChangeSet, Long>> tasksOffsets,
+                StreamStateHandle handle,
+                @Nullable StreamStateHandle localHandle) {
             this.tasksOffsets = unmodifiableMap(tasksOffsets);
             this.handle = Preconditions.checkNotNull(handle);
+            this.localHandle = localHandle;
         }
 
         public void complete() {
@@ -66,7 +77,7 @@ public interface StateChangeUploader extends AutoCloseable {
         private List<UploadResult> buildResults(
                 StreamStateHandle handle, Map<StateChangeSet, Long> offsets) {
             return offsets.entrySet().stream()
-                    .map(e -> UploadResult.of(handle, e.getKey(), e.getValue()))
+                    .map(e -> UploadResult.of(handle, localHandle, e.getKey(), e.getValue()))
                     .collect(toList());
         }
 

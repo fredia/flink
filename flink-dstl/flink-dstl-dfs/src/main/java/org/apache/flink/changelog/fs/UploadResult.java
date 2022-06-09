@@ -21,12 +21,15 @@ import org.apache.flink.annotation.Internal;
 import org.apache.flink.runtime.state.StreamStateHandle;
 import org.apache.flink.runtime.state.changelog.SequenceNumber;
 
+import javax.annotation.Nullable;
+
 import static org.apache.flink.util.Preconditions.checkNotNull;
 
 /** Result of uploading state changes. */
 @Internal
 public final class UploadResult {
     public final StreamStateHandle streamStateHandle;
+    @Nullable public final StreamStateHandle localStreamHandle;
     public final long offset;
     public final SequenceNumber sequenceNumber;
     public final long size;
@@ -36,14 +39,29 @@ public final class UploadResult {
             long offset,
             SequenceNumber sequenceNumber,
             long size) {
+        this(streamStateHandle, null, offset, sequenceNumber, size);
+    }
+
+    public UploadResult(
+            StreamStateHandle streamStateHandle,
+            @Nullable StreamStateHandle localStreamHandle,
+            long offset,
+            SequenceNumber sequenceNumber,
+            long size) {
         this.streamStateHandle = checkNotNull(streamStateHandle);
+        this.localStreamHandle = localStreamHandle;
         this.offset = offset;
         this.sequenceNumber = checkNotNull(sequenceNumber);
         this.size = size;
     }
 
-    public static UploadResult of(StreamStateHandle handle, StateChangeSet changeSet, long offset) {
-        return new UploadResult(handle, offset, changeSet.getSequenceNumber(), changeSet.getSize());
+    public static UploadResult of(
+            StreamStateHandle handle,
+            StreamStateHandle localHandle,
+            StateChangeSet changeSet,
+            long offset) {
+        return new UploadResult(
+                handle, localHandle, offset, changeSet.getSequenceNumber(), changeSet.getSize());
     }
 
     public StreamStateHandle getStreamStateHandle() {
@@ -66,6 +84,8 @@ public final class UploadResult {
     public String toString() {
         return "streamStateHandle="
                 + streamStateHandle
+                + "localStreamHandle"
+                + localStreamHandle
                 + ", size="
                 + size
                 + ", offset="

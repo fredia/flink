@@ -92,7 +92,8 @@ public class FsStateChangelogStorage extends FsStateChangelogStorageForRecovery
                         jobID,
                         config,
                         new ChangelogStorageMetricGroup(metricGroup),
-                        changelogRegistry),
+                        changelogRegistry,
+                        localRecoveryConfig),
                 config.get(PREEMPTIVE_PERSIST_THRESHOLD).getBytes(),
                 changelogRegistry,
                 localRecoveryConfig);
