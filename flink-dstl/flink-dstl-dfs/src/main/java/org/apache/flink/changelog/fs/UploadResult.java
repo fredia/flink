@@ -68,6 +68,10 @@ public final class UploadResult {
         return streamStateHandle;
     }
 
+    public StreamStateHandle getLocalStreamHandleStateHandle() {
+        return localStreamHandle;
+    }
+
     public long getOffset() {
         return offset;
     }

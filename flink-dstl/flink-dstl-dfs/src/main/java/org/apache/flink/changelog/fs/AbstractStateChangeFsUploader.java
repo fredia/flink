@@ -88,6 +88,12 @@ public abstract class AbstractStateChangeFsUploader implements StateChangeUpload
             if (stream instanceof DuplicatingOutputStreamWithPos) {
                 StreamStateHandle localHandle =
                         ((DuplicatingOutputStreamWithPos) stream).getSecondaryHandle(handleFactory);
+                changelogRegistry.startTracking(
+                        localHandle,
+                        tasks.stream()
+                                .flatMap(t -> t.getChangeSets().stream())
+                                .map(StateChangeSet::getLogId)
+                                .collect(Collectors.toSet()));
                 return new UploadTasksResult(tasksOffsets, handle, localHandle);
             }
             // WARN: streams have to be closed before returning the results

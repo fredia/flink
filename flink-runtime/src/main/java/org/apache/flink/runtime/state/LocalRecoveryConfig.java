@@ -33,8 +33,18 @@ public class LocalRecoveryConfig {
     /** Encapsulates the root directories and the subtask-specific path. */
     @Nullable private final LocalRecoveryDirectoryProvider localStateDirectories;
 
+    @Nullable private final LocalStateRegistry localStateRegistry;
+
     public LocalRecoveryConfig(@Nullable LocalRecoveryDirectoryProvider directoryProvider) {
         this.localStateDirectories = directoryProvider;
+        this.localStateRegistry = null;
+    }
+
+    public LocalRecoveryConfig(
+            @Nullable LocalRecoveryDirectoryProvider directoryProvider,
+            @Nullable LocalStateRegistry localStateRegistry) {
+        this.localStateDirectories = directoryProvider;
+        this.localStateRegistry = localStateRegistry;
     }
 
     public boolean isLocalRecoveryEnabled() {
@@ -43,6 +53,10 @@ public class LocalRecoveryConfig {
 
     public Optional<LocalRecoveryDirectoryProvider> getLocalStateDirectoryProvider() {
         return Optional.ofNullable(localStateDirectories);
+    }
+
+    public Optional<LocalStateRegistry> getLocalStateRegistry() {
+        return Optional.ofNullable(localStateRegistry);
     }
 
     @Override

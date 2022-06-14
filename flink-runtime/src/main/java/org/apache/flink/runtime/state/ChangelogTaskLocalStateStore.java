@@ -19,6 +19,7 @@
 package org.apache.flink.runtime.state;
 
 import org.apache.flink.api.common.JobID;
+import org.apache.flink.core.fs.Path;
 import org.apache.flink.runtime.checkpoint.OperatorSubtaskState;
 import org.apache.flink.runtime.checkpoint.TaskStateSnapshot;
 import org.apache.flink.runtime.clusterframework.types.AllocationID;
@@ -35,7 +36,9 @@ import javax.annotation.Nullable;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
@@ -44,6 +47,7 @@ import java.util.concurrent.Executor;
 import java.util.function.LongPredicate;
 import java.util.stream.Collectors;
 
+import static org.apache.flink.runtime.state.filesystem.AbstractFsCheckpointStorageAccess.CHECKPOINT_TASK_OWNED_STATE_DIR;
 import static org.apache.flink.util.Preconditions.checkState;
 
 /** Changelog's implementation of a {@link TaskLocalStateStore}. */
@@ -97,6 +101,47 @@ public class ChangelogTaskLocalStateStore extends TaskLocalStateStoreImpl {
         }
     }
 
+    public static Path getLocalTaskOwnedDirectory(LocalRecoveryDirectoryProvider provider) {
+        File outDir = provider.selectAllocationBaseDirectory(0);
+        if (!outDir.exists() && !outDir.mkdirs()) {
+            LOG.error(
+                    "Local state base directory does not exist and could not be created: "
+                            + outDir);
+        }
+        return new Path(outDir.toURI().toString(), CHECKPOINT_TASK_OWNED_STATE_DIR);
+    }
+
+    @Override
+    public void abortCheckpoint(long abortedCheckpointId) {
+
+        LOG.debug(
+                "Received abort information for checkpoint {} in subtask ({} - {} - {}). Starting to prune history.",
+                abortedCheckpointId,
+                jobID,
+                jobVertexID,
+                subtaskIndex);
+
+        pruneCheckpoints(
+                snapshotCheckpointId -> snapshotCheckpointId == abortedCheckpointId, false);
+
+        // Local store only keeps one checkpoint, discard all changelog handle in taskowned
+        // directory.
+        // Scenarios:
+        //   cp1: m1
+        //   confirm cp1, do nothing
+        //   cp2: m1, c1
+        //   abort cp2, delete m1, c1
+        //   cp3: m1, c1, c2
+        //   confirm cp3, do nothing
+        //   -> if failover, restore from local cp3 will fail, because m1 does not exist, c1 may not
+        // exist either(depend on BatchingStateChangeUploadScheduler).
+        File[] fileInTaskOwned =
+                new File(getLocalTaskOwnedDirectory(getLocalRecoveryDirectoryProvider()).toUri())
+                        .listFiles();
+        syncDiscardFileForCollection(
+                fileInTaskOwned == null ? Collections.emptyList() : Arrays.asList(fileInTaskOwned));
+    }
+
     @Override
     public void storeLocalState(long checkpointId, @Nullable TaskStateSnapshot localState) {
         if (checkpointId < lastCheckpointId) {
@@ -137,13 +182,13 @@ public class ChangelogTaskLocalStateStore extends TaskLocalStateStoreImpl {
 
         discardExecutor.execute(
                 () ->
-                        syncDiscardDirectoryForCollection(
+                        syncDiscardFileForCollection(
                                 materializationToRemove.stream()
                                         .map(super::getCheckpointDirectory)
                                         .collect(Collectors.toList())));
     }
 
-    private void syncDiscardDirectoryForCollection(Collection<File> toDiscard) {
+    private void syncDiscardFileForCollection(Collection<File> toDiscard) {
         for (File directory : toDiscard) {
             if (directory.exists()) {
                 try {
@@ -181,6 +226,16 @@ public class ChangelogTaskLocalStateStore extends TaskLocalStateStoreImpl {
     @Override
     public CompletableFuture<Void> dispose() {
         deleteMaterialization(id -> true);
+        // delete all ChangelogStateHandle in taskowned directory.
+        discardExecutor.execute(
+                () ->
+                        syncDiscardFileForCollection(
+                                Collections.singleton(
+                                        new File(
+                                                getLocalTaskOwnedDirectory(
+                                                                getLocalRecoveryDirectoryProvider())
+                                                        .toUri()))));
+
         synchronized (lock) {
             mapToMaterializationId.clear();
         }

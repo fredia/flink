@@ -95,7 +95,7 @@ class FsStateChangelogWriterTest {
                     writer.persist(sqn);
                     uploader.completeUpload();
                     uploader.reset();
-                    writer.confirm(sqn, writer.nextSequenceNumber());
+                    writer.confirm(sqn, writer.nextSequenceNumber(), 1L);
                     writer.persist(sqn);
                     assertNoUpload(uploader, "confirmed changes shouldn't be re-uploaded");
                 });

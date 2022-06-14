@@ -128,7 +128,7 @@ abstract class StateChangeLoggerTestBase<Namespace> {
         public void truncate(SequenceNumber to) {}
 
         @Override
-        public void confirm(SequenceNumber from, SequenceNumber to) {}
+        public void confirm(SequenceNumber from, SequenceNumber to, long checkpointId) {}
 
         @Override
         public void reset(SequenceNumber from, SequenceNumber to) {}

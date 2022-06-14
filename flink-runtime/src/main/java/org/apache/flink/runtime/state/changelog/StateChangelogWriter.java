@@ -72,7 +72,7 @@ public interface StateChangelogWriter<Handle extends ChangelogStateHandle> exten
      * @param from inclusive
      * @param to exclusive
      */
-    void confirm(SequenceNumber from, SequenceNumber to);
+    void confirm(SequenceNumber from, SequenceNumber to, long checkpointId);
 
     /**
      * Reset the state the given state changes. Called upon abortion so that if requested later then

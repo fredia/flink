@@ -81,6 +81,8 @@ public class TaskExecutorLocalStateStoresManager {
 
     private final Thread shutdownHook;
 
+    private final LocalStateRegistry localStateRegistry;
+
     @GuardedBy("lock")
     private boolean closed;
 
@@ -101,6 +103,7 @@ public class TaskExecutorLocalStateStoresManager {
         this.discardExecutor = discardExecutor;
         this.lock = new Object();
         this.closed = false;
+        this.localStateRegistry = new LocalStateRegistry(discardExecutor);
 
         for (File localStateRecoveryRootDir : localStateRootDirectories.deref()) {
 
@@ -167,7 +170,7 @@ public class TaskExecutorLocalStateStoresManager {
                 }
 
                 LocalRecoveryConfig localRecoveryConfig =
-                        new LocalRecoveryConfig(directoryProvider);
+                        new LocalRecoveryConfig(directoryProvider, this.localStateRegistry);
 
                 boolean changelogEnabled =
                         jobConfiguration
@@ -327,6 +330,7 @@ public class TaskExecutorLocalStateStoresManager {
                 }
             }
         }
+        localStateRegistry.close();
     }
 
     @VisibleForTesting

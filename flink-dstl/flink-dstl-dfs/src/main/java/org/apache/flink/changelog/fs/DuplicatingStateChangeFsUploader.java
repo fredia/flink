@@ -28,12 +28,27 @@ import org.apache.flink.runtime.state.filesystem.FileStateHandle;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.File;
 import java.io.IOException;
 
-import static org.apache.flink.runtime.state.filesystem.AbstractFsCheckpointStorageAccess.CHECKPOINT_TASK_OWNED_STATE_DIR;
+import static org.apache.flink.runtime.state.ChangelogTaskLocalStateStore.getLocalTaskOwnedDirectory;
 
-/** A StateChangeFsUploader implementation that writes the changes to remote and local. */
+/**
+ * A StateChangeFsUploader implementation that writes the changes to remote and local.
+ *
+ * <p>The total discard logic of local dstl files is:
+ *
+ * <ol>
+ *   <li>Register files to {@link TaskChangelogRegistry#startTracking} on {@link #upload}.
+ *   <li>Pass control of the file to {@link
+ *       org.apache.flink.runtime.state.LocalStateRegistry#register} when confirm() , files of the
+ *       previous checkpoint will be unregistered/deleted by {@link
+ *       org.apache.flink.runtime.state.LocalStateRegistry#unRegister} at the same time; for remote
+ *       file, we pass control of the file to JM.
+ *   <li>When ChangelogTruncateHelper#materialized or ChangelogTruncateHelper#checkpointSubsumed()
+ *       is called, {@link TaskChangelogRegistry#notUsed} is responsible for deleting local files.
+ *       BTW, it is possible that the file has already been truncated by LocalStateRegistry.
+ * </ol>
+ */
 public class DuplicatingStateChangeFsUploader extends AbstractStateChangeFsUploader {
 
     private static final Logger LOG =
@@ -57,23 +72,14 @@ public class DuplicatingStateChangeFsUploader extends AbstractStateChangeFsUploa
         this.localRecoveryDirectoryProvider = localRecoveryDirectoryProvider;
     }
 
-    private Path getLocalDirectoryPath() {
-        File outDir = localRecoveryDirectoryProvider.selectAllocationBaseDirectory(0);
-        if (!outDir.exists() && !outDir.mkdirs()) {
-            LOG.error(
-                    "Local state base directory does not exist and could not be created: "
-                            + outDir);
-        }
-        return new Path(outDir.toURI().toString(), CHECKPOINT_TASK_OWNED_STATE_DIR);
-    }
-
     @Override
     public OutputStreamWithPos prepareStream() throws IOException {
         final String fileName = generateFileName();
         LOG.debug("upload tasks to {}", fileName);
         Path path = new Path(basePath, fileName);
         FSDataOutputStream primaryStream = fileSystem.create(path, WriteMode.NO_OVERWRITE);
-        Path localPath = new Path(getLocalDirectoryPath(), fileName);
+        Path localPath =
+                new Path(getLocalTaskOwnedDirectory(localRecoveryDirectoryProvider), fileName);
         FSDataOutputStream secondaryStream =
                 localPath.getFileSystem().create(localPath, WriteMode.NO_OVERWRITE);
         DuplicatingOutputStreamWithPos outputStream =

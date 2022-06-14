@@ -23,12 +23,14 @@ import org.apache.flink.api.java.tuple.Tuple2;
 import org.apache.flink.changelog.fs.StateChangeUploadScheduler.UploadTask;
 import org.apache.flink.runtime.state.KeyGroupRange;
 import org.apache.flink.runtime.state.LocalRecoveryConfig;
+import org.apache.flink.runtime.state.LocalStateRegistry;
 import org.apache.flink.runtime.state.StreamStateHandle;
 import org.apache.flink.runtime.state.changelog.ChangelogStateHandleStreamImpl;
 import org.apache.flink.runtime.state.changelog.SequenceNumber;
 import org.apache.flink.runtime.state.changelog.SequenceNumberRange;
 import org.apache.flink.runtime.state.changelog.StateChange;
 import org.apache.flink.runtime.state.changelog.StateChangelogWriter;
+import org.apache.flink.util.Preconditions;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -269,6 +271,9 @@ class FsStateChangelogWriter implements StateChangelogWriter<ChangelogStateHandl
                                 // uploaded already truncated, i.e. materialized state changes,
                                 // or closed
                                 changelogRegistry.notUsed(result.streamStateHandle, logId);
+                                if (result.localStreamHandle != null) {
+                                    changelogRegistry.notUsed(result.localStreamHandle, logId);
+                                }
                             }
                         }
                     }
@@ -321,7 +326,7 @@ class FsStateChangelogWriter implements StateChangelogWriter<ChangelogStateHandl
     }
 
     @Override
-    public void confirm(SequenceNumber from, SequenceNumber to) {
+    public void confirm(SequenceNumber from, SequenceNumber to, long checkpointId) {
         checkState(from.compareTo(to) <= 0, "Invalid confirm range: [%s,%s)", from, to);
         checkState(
                 from.compareTo(activeSequenceNumber) <= 0
@@ -336,6 +341,21 @@ class FsStateChangelogWriter implements StateChangelogWriter<ChangelogStateHandl
         uploaded.subMap(from, to).values().stream()
                 .map(UploadResult::getStreamStateHandle)
                 .forEach(changelogRegistry::stopTracking);
+
+        if (localRecoveryConfig.isLocalRecoveryEnabled()) {
+            LocalStateRegistry localStateRegistry =
+                    localRecoveryConfig
+                            .getLocalStateRegistry()
+                            .orElseThrow(LocalRecoveryConfig.localRecoveryNotEnabled());
+
+            // transfer the control of localHandle to localStateRegistry.
+            for (UploadResult result : uploaded.subMap(from, to).values()) {
+                Preconditions.checkNotNull(result.localStreamHandle);
+                changelogRegistry.stopTracking(result.localStreamHandle);
+                localStateRegistry.register(result.localStreamHandle, checkpointId);
+            }
+            localStateRegistry.unRegister(checkpointId);
+        }
     }
 
     @Override
@@ -447,6 +467,9 @@ class FsStateChangelogWriter implements StateChangelogWriter<ChangelogStateHandl
         LOG.trace("Uploaded state to discard: {}", notUsedState);
         for (UploadResult result : notUsedState.values()) {
             changelogRegistry.notUsed(result.streamStateHandle, logId);
+            if (result.localStreamHandle != null) {
+                changelogRegistry.notUsed(result.localStreamHandle, logId);
+            }
         }
     }
 }

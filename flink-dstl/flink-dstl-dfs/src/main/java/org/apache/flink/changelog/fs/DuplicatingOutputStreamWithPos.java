@@ -44,7 +44,7 @@ class DuplicatingOutputStreamWithPos extends OutputStreamWithPos {
     private final Path secondaryPath;
 
     /**
-     * Stores a potential exception that occurred while interacting with {@link #secondaryStream}
+     * Stores a potential exception that occurred while interacting with {@link #secondaryStream}.
      */
     private Exception secondaryStreamException;
 

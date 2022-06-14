@@ -515,7 +515,7 @@ public class ChangelogKeyedStateBackend<K>
             // newer upload instead of the previous one. This newer upload could then be re-used
             // while in fact JM has discarded its results.
             // This might change if the log ownership changes (the method won't likely be needed).
-            stateChangelogWriter.confirm(lastUploadedFrom, lastUploadedTo);
+            stateChangelogWriter.confirm(lastUploadedFrom, lastUploadedTo, checkpointId);
         }
         Long materializationID = materializationIdByCheckpointId.remove(checkpointId);
         if (materializationID != null) {

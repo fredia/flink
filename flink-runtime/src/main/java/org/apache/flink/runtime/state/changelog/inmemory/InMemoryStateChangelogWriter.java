@@ -113,7 +113,7 @@ class InMemoryStateChangelogWriter implements StateChangelogWriter<InMemoryChang
     }
 
     @Override
-    public void confirm(SequenceNumber from, SequenceNumber to) {}
+    public void confirm(SequenceNumber from, SequenceNumber to, long checkpointID) {}
 
     @Override
     public void reset(SequenceNumber from, SequenceNumber to) {}
