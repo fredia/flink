@@ -19,6 +19,7 @@ package org.apache.flink.changelog.fs;
 
 import org.apache.flink.runtime.mailbox.SyncMailboxExecutor;
 import org.apache.flink.runtime.state.KeyGroupRange;
+import org.apache.flink.runtime.state.SnapshotResult;
 import org.apache.flink.runtime.state.TestLocalRecoveryConfig;
 import org.apache.flink.runtime.state.changelog.ChangelogStateHandleStreamImpl;
 import org.apache.flink.runtime.state.changelog.SequenceNumber;
@@ -73,12 +74,15 @@ class FsStateChangelogWriterTest {
         withWriter(
                 (writer, uploader) -> {
                     byte[] bytes = getBytes();
-                    CompletableFuture<ChangelogStateHandleStreamImpl> future =
+                    CompletableFuture<SnapshotResult<ChangelogStateHandleStreamImpl>> future =
                             writer.persist(append(writer, bytes));
                     assertSubmittedOnly(uploader, bytes);
                     uploader.completeUpload();
                     assertThat(
-                                    getOnlyElement(future.get().getHandlesAndOffsets())
+                                    getOnlyElement(
+                                                    future.get()
+                                                            .getJobManagerOwnedSnapshot()
+                                                            .getHandlesAndOffsets())
                                             .f0
                                             .asBytesIfInMemory()
                                             .get())
@@ -150,7 +154,9 @@ class FsStateChangelogWriterTest {
                                         (writer, uploader) -> {
                                             byte[] bytes = getBytes();
                                             SequenceNumber sqn = append(writer, bytes);
-                                            CompletableFuture<ChangelogStateHandleStreamImpl>
+                                            CompletableFuture<
+                                                            SnapshotResult<
+                                                                    ChangelogStateHandleStreamImpl>>
                                                     future = writer.persist(sqn);
                                             uploader.failUpload(new RuntimeException("test"));
                                             try {
@@ -187,7 +193,8 @@ class FsStateChangelogWriterTest {
                     uploader.failUpload(new RuntimeException("test"));
                     uploader.reset();
                     SequenceNumber sqn2 = append(writer, bytes);
-                    CompletableFuture<ChangelogStateHandleStreamImpl> future = writer.persist(sqn2);
+                    CompletableFuture<SnapshotResult<ChangelogStateHandleStreamImpl>> future =
+                            writer.persist(sqn2);
                     uploader.completeUpload();
                     future.get();
                 });

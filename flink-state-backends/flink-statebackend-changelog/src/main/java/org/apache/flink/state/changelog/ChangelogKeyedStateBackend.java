@@ -416,22 +416,34 @@ public class ChangelogKeyedStateBackend<K>
 
     private SnapshotResult<ChangelogStateBackendHandle> buildSnapshotResult(
             long checkpointId,
-            ChangelogStateHandle delta,
+            SnapshotResult<? extends ChangelogStateHandle> delta,
             ChangelogSnapshotState changelogStateBackendStateCopy) {
 
         // collections don't change once started and handles are immutable
         List<ChangelogStateHandle> prevDeltaCopy =
                 new ArrayList<>(changelogStateBackendStateCopy.getRestoredNonMaterialized());
         long persistedSizeOfThisCheckpoint = 0L;
-        if (delta != null && delta.getStateSize() > 0) {
-            prevDeltaCopy.add(delta);
-            persistedSizeOfThisCheckpoint += delta.getCheckpointedSize();
+        if (delta != null
+                && delta.getJobManagerOwnedSnapshot() != null
+                && delta.getJobManagerOwnedSnapshot().getStateSize() > 0) {
+            prevDeltaCopy.add(delta.getJobManagerOwnedSnapshot());
+            persistedSizeOfThisCheckpoint +=
+                    delta.getJobManagerOwnedSnapshot().getCheckpointedSize();
         }
 
         if (prevDeltaCopy.isEmpty()
                 && changelogStateBackendStateCopy.getMaterializedSnapshot().isEmpty()) {
             return SnapshotResult.empty();
-        } else if (!changelogStateBackendStateCopy.getLocalMaterializedSnapshot().isEmpty()) {
+        } else if (!changelogStateBackendStateCopy.getLocalMaterializedSnapshot().isEmpty()
+                || delta.getTaskLocalSnapshot() != null) {
+            List<ChangelogStateHandle> localDeltaCopy =
+                    new ArrayList<>(
+                            changelogStateBackendStateCopy.getLocalRestoredNonMaterialized());
+            if (delta != null
+                    && delta.getTaskLocalSnapshot() != null
+                    && delta.getTaskLocalSnapshot().getStateSize() > 0) {
+                localDeltaCopy.add(delta.getTaskLocalSnapshot());
+            }
             ChangelogStateBackendHandleImpl jmHandle =
                     new ChangelogStateBackendHandleImpl(
                             changelogStateBackendStateCopy.getMaterializedSnapshot(),
@@ -444,7 +456,7 @@ public class ChangelogKeyedStateBackend<K>
                     jmHandle,
                     new ChangelogStateBackendLocalHandle(
                             changelogStateBackendStateCopy.getLocalMaterializedSnapshot(),
-                            prevDeltaCopy,
+                            localDeltaCopy,
                             jmHandle));
         } else {
             return SnapshotResult.of(

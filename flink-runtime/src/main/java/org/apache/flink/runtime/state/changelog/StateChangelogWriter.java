@@ -18,6 +18,7 @@
 package org.apache.flink.runtime.state.changelog;
 
 import org.apache.flink.annotation.Internal;
+import org.apache.flink.runtime.state.SnapshotResult;
 
 import java.io.IOException;
 import java.util.concurrent.CompletableFuture;
@@ -41,13 +42,13 @@ public interface StateChangelogWriter<Handle extends ChangelogStateHandle> exten
     /**
      * Durably persist previously {@link #append(int, byte[]) appended} data starting from the
      * provided {@link SequenceNumber} and up to the latest change added. After this call, one of
-     * {@link #confirm(SequenceNumber, SequenceNumber) confirm}, {@link #reset(SequenceNumber,
+     * {@link #confirm(SequenceNumber, SequenceNumber, long) confirm}, {@link #reset(SequenceNumber,
      * SequenceNumber) reset}, or {@link #truncate(SequenceNumber) truncate} eventually must be
      * called for the corresponding change set. with reset/truncate/confirm methods?
      *
      * @param from inclusive
      */
-    CompletableFuture<Handle> persist(SequenceNumber from) throws IOException;
+    CompletableFuture<SnapshotResult<Handle>> persist(SequenceNumber from) throws IOException;
 
     /**
      * Truncate this state changelog to free up the resources and collect any garbage. That means:
