@@ -152,7 +152,7 @@ public class RocksDBIncrementalRestoreOperation<K> implements RocksDBRestoreOper
     /** Root method that branches for different implementations of {@link KeyedStateHandle}. */
     @Override
     public RocksDBRestoreResult restore() throws Exception {
-
+        long currentTime = System.currentTimeMillis();
         if (restoreStateHandles == null || restoreStateHandles.isEmpty()) {
             return null;
         }
@@ -168,6 +168,7 @@ public class RocksDBIncrementalRestoreOperation<K> implements RocksDBRestoreOper
         } else {
             restoreWithoutRescaling(theFirstStateHandle);
         }
+        logger.info("restore rocksdb cost {} ms.", System.currentTimeMillis() - currentTime);
         return new RocksDBRestoreResult(
                 this.rocksHandle.getDb(),
                 this.rocksHandle.getDefaultColumnFamilyHandle(),

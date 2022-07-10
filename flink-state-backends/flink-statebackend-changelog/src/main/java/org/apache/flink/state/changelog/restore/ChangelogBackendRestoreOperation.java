@@ -32,6 +32,9 @@ import org.apache.flink.util.Preconditions;
 import org.apache.flink.util.function.BiFunctionWithException;
 import org.apache.flink.util.function.FunctionWithException;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
@@ -44,6 +47,8 @@ import java.util.stream.Collectors;
  */
 @Internal
 public class ChangelogBackendRestoreOperation {
+    private static final Logger LOG =
+            LoggerFactory.getLogger(ChangelogBackendRestoreOperation.class);
     /** Builds base backend for {@link ChangelogKeyedStateBackend} from state. */
     @FunctionalInterface
     public interface BaseBackendBuilder<K>
@@ -69,12 +74,21 @@ public class ChangelogBackendRestoreOperation {
         AbstractKeyedStateBackend<K> baseBackend = baseBackendBuilder.apply(baseState);
         ChangelogRestoreTarget<K> changelogRestoreTarget =
                 changelogRestoreTargetBuilder.apply(baseBackend, stateHandles);
-
+        long nonMaterializedSize =
+                stateHandles.stream()
+                        .flatMap(x -> x.getNonMaterializedStateHandles().stream())
+                        .mapToLong(x -> x.getStateSize())
+                        .sum();
+        LOG.info("read changelog handle start, total state size={} .", nonMaterializedSize);
+        long currentTime = System.currentTimeMillis();
         for (ChangelogStateBackendHandle handle : stateHandles) {
             if (handle != null) { // null is empty state (no change)
                 readBackendHandle(changelogRestoreTarget, handle, classLoader);
             }
         }
+        LOG.info(
+                "read read changelog handle end, cost {} ms.",
+                System.currentTimeMillis() - currentTime);
         return changelogRestoreTarget.getRestoredKeyedStateBackend();
     }
 
