@@ -72,10 +72,10 @@ public class IncrementalCheckpointsTestProgram {
         DataStream<TestEvent> eventSource =
                 addEventSource(
                         env,
-                        // ~1K random bytes per event
-                        params.getInt("payloadSizeBytes", 1000),
                         // with DoP = 20, 10K events per second in total
                         params.getInt("eventsPerSecondPerReader", 500),
+                        // ~1K random bytes per event
+                        params.getInt("payloadSizeBytes", 1000),
                         keySelector);
 
         addWorkloads(eventSource, params, keySelector).addSink(new DiscardingSink<>());

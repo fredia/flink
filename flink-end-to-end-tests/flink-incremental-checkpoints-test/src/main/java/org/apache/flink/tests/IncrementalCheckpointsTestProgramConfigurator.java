@@ -29,7 +29,6 @@ import org.slf4j.LoggerFactory;
 import java.time.Duration;
 
 import static org.apache.flink.changelog.fs.FsStateChangelogOptions.PREEMPTIVE_PERSIST_THRESHOLD;
-import static org.apache.flink.configuration.CheckpointingOptions.CHECKPOINTS_DIRECTORY;
 import static org.apache.flink.configuration.CheckpointingOptions.CHECKPOINT_STORAGE;
 import static org.apache.flink.configuration.CheckpointingOptions.FS_SMALL_FILE_THRESHOLD;
 import static org.apache.flink.configuration.CheckpointingOptions.INCREMENTAL_CHECKPOINTS;
@@ -42,6 +41,11 @@ import static org.apache.flink.configuration.StateBackendOptions.STATE_BACKEND;
 import static org.apache.flink.configuration.StateChangelogOptions.ENABLE_STATE_CHANGE_LOG;
 import static org.apache.flink.configuration.StateChangelogOptions.PERIODIC_MATERIALIZATION_INTERVAL;
 import static org.apache.flink.configuration.StateChangelogOptions.STATE_CHANGE_LOG_STORAGE;
+import static org.apache.flink.configuration.TaskManagerOptions.BUFFER_DEBLOAT_ENABLED;
+import static org.apache.flink.configuration.TaskManagerOptions.BUFFER_DEBLOAT_PERIOD;
+import static org.apache.flink.configuration.TaskManagerOptions.BUFFER_DEBLOAT_SAMPLES;
+import static org.apache.flink.configuration.TaskManagerOptions.BUFFER_DEBLOAT_TARGET;
+import static org.apache.flink.configuration.TaskManagerOptions.NETWORK_MEMORY_MAX;
 import static org.apache.flink.configuration.WebOptions.CHECKPOINTS_HISTORY_SIZE;
 import static org.apache.flink.streaming.api.CheckpointingMode.EXACTLY_ONCE;
 import static org.apache.flink.streaming.api.environment.ExecutionCheckpointingOptions.CHECKPOINTING_INTERVAL;
@@ -55,8 +59,8 @@ class IncrementalCheckpointsTestProgramConfigurator {
     public static Configuration conf(ParameterTool params) {
         Configuration conf = new Configuration();
 
-        basicSetup(conf);
-        configureBackPressure(conf);
+        basicSetup(conf, params);
+        configureBackPressure(conf, params);
         configureDebugging(conf);
 
         switch (params.get("preset")) {
@@ -80,27 +84,31 @@ class IncrementalCheckpointsTestProgramConfigurator {
         return conf;
     }
 
-    private static void basicSetup(Configuration conf) {
-        conf.set(CoreOptions.DEFAULT_PARALLELISM, 20);
-        conf.set(CHECKPOINTING_MODE, EXACTLY_ONCE);
-        conf.set(CHECKPOINTING_INTERVAL, Duration.ofMillis(10)); // as fast as can
-        conf.set(CHECKPOINT_STORAGE, "filesystem");
-        // do NOT override cluster value
+    private static void basicSetup(Configuration conf, ParameterTool params) {
         conf.set(
-                CHECKPOINTS_DIRECTORY,
-                "s3://changelog-backend-testing-eu/changelog"); // TODO: remove
-        conf.set(FS_SMALL_FILE_THRESHOLD, MemorySize.ofMebiBytes(1));
+                CoreOptions.DEFAULT_PARALLELISM,
+                params.getInt(CoreOptions.DEFAULT_PARALLELISM.key(), 20));
+        conf.set(CHECKPOINTING_MODE, EXACTLY_ONCE);
+        conf.set(
+                CHECKPOINTING_INTERVAL,
+                Duration.ofMillis(
+                        params.getLong(CHECKPOINTING_INTERVAL.key(), 10))); // as fast as can
+        conf.set(CHECKPOINT_STORAGE, "filesystem");
+        conf.set(
+                FS_SMALL_FILE_THRESHOLD,
+                MemorySize.ofMebiBytes(params.getInt(FS_SMALL_FILE_THRESHOLD.key(), 1)));
     }
 
-    private static void configureBackPressure(Configuration conf) {
+    private static void configureBackPressure(Configuration conf, ParameterTool params) {
         // tried: UC, BD, smaller network size - didn't work (UC helps a bit)
         // non-blocking throttling in sources did work
+        // 可以被override
         conf.set(ENABLE_UNALIGNED, true);
-        // conf.set(BUFFER_DEBLOAT_ENABLED, true);
-        // conf.set(BUFFER_DEBLOAT_TARGET, Duration.ofMillis(100));
-        // conf.set(BUFFER_DEBLOAT_PERIOD, Duration.ofMillis(50));
-        // conf.set(BUFFER_DEBLOAT_SAMPLES, 10);
-        // conf.set(NETWORK_MEMORY_MAX, MemorySize.ofMebiBytes(100));
+        conf.set(BUFFER_DEBLOAT_ENABLED, params.getBoolean(BUFFER_DEBLOAT_ENABLED.key(), false));
+        conf.set(BUFFER_DEBLOAT_TARGET, Duration.ofMillis(100));
+        conf.set(BUFFER_DEBLOAT_PERIOD, Duration.ofMillis(50));
+        conf.set(BUFFER_DEBLOAT_SAMPLES, 10);
+        conf.set(NETWORK_MEMORY_MAX, MemorySize.ofMebiBytes(100));
     }
 
     private static void configureFlip151(Configuration conf, ParameterTool params) {
@@ -118,13 +126,16 @@ class IncrementalCheckpointsTestProgramConfigurator {
 
     private static void configureFlip158(Configuration conf, ParameterTool params) {
         conf.set(ENABLE_STATE_CHANGE_LOG, params.getBoolean(ENABLE_STATE_CHANGE_LOG.key()));
+        conf.set(STATE_BACKEND, params.get(STATE_BACKEND.key(), "rocksdb"));
+        conf.set(INCREMENTAL_CHECKPOINTS, params.getBoolean(INCREMENTAL_CHECKPOINTS.key(), true));
         conf.set(
-                STATE_BACKEND,
-                "org.apache.flink.contrib.streaming.state.RocksDBStateBackendFactory");
-        conf.set(INCREMENTAL_CHECKPOINTS, true);
-        conf.set(PREEMPTIVE_PERSIST_THRESHOLD, MemorySize.ofMebiBytes(10));
-        conf.set(PERIODIC_MATERIALIZATION_INTERVAL, Duration.ofMinutes(3));
-        conf.set(LOCAL_RECOVERY, false); // not supported
+                PREEMPTIVE_PERSIST_THRESHOLD,
+                MemorySize.ofMebiBytes(params.getInt(PREEMPTIVE_PERSIST_THRESHOLD.key(), 10)));
+        conf.set(
+                PERIODIC_MATERIALIZATION_INTERVAL,
+                Duration.ofMinutes(params.getInt(PERIODIC_MATERIALIZATION_INTERVAL.key(), 3)));
+        // todo: 在这里配置local recovery没用，需要在yaml里配置
+        conf.set(LOCAL_RECOVERY, params.getBoolean(LOCAL_RECOVERY.key(), false)); // not supported
         // cluster-level (for reference only)
         conf.set(STATE_CHANGE_LOG_STORAGE, "filesystem");
         conf.set(JOB_MANAGER_IO_POOL_SIZE, 250); // FLINK-26590
