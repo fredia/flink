@@ -23,6 +23,7 @@ import org.apache.flink.runtime.checkpoint.metadata.CheckpointTestUtils;
 import org.junit.Assert;
 import org.junit.Test;
 
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Random;
 import java.util.UUID;
@@ -219,6 +220,46 @@ public class IncrementalRemoteKeyedStateHandleTest {
             verify(stateHandle, never()).discardState();
         }
         sharedStateRegistryB.close();
+    }
+
+    @Test
+    public void testWithConcurrentCheckpoints() throws Exception {
+        SharedStateRegistry stateRegistry = new SharedStateRegistryImpl();
+        Random rnd = new Random(3);
+        StateHandleID id1 = new StateHandleID("sst-1");
+
+        // Construct IncrementalRemoteKeyedStateHandle for chk-1
+        StreamStateHandle sharedState1 = spy(CheckpointTestUtils.createDummyStreamStateHandle(rnd,null));
+        Map<StateHandleID, StreamStateHandle> sharedStateMap1 = new HashMap<>();
+        sharedStateMap1.put(id1, sharedState1);
+        IncrementalRemoteKeyedStateHandle stateHandle1 = new IncrementalRemoteKeyedStateHandle(
+                UUID.nameUUIDFromBytes("test".getBytes()),
+                KeyGroupRange.of(0, 0),
+                1L,
+                sharedStateMap1,
+                placeSpies(CheckpointTestUtils.createRandomStateHandleMap(rnd)),
+                spy(CheckpointTestUtils.createDummyStreamStateHandle(rnd, null)));
+        // Register shared handle for chk-1
+        stateHandle1.registerSharedStates(stateRegistry,1);
+        verify(sharedState1, never()).discardState();
+
+        // Construct IncrementalRemoteKeyedStateHandle for chk-2, it has one shared state with the same ID.
+        StreamStateHandle sharedState2 = spy(CheckpointTestUtils.createDummyStreamStateHandle(rnd,null));
+        Map<StateHandleID, StreamStateHandle> sharedStateMap2 = new HashMap<>();
+        sharedStateMap2.put(id1, sharedState2);
+        IncrementalRemoteKeyedStateHandle stateHandle2 = new IncrementalRemoteKeyedStateHandle(
+                UUID.nameUUIDFromBytes("test".getBytes()),
+                KeyGroupRange.of(0, 0),
+                2L,
+                sharedStateMap2,
+                placeSpies(CheckpointTestUtils.createRandomStateHandleMap(rnd)),
+                spy(CheckpointTestUtils.createDummyStreamStateHandle(rnd, null)));
+        verify(sharedState1, never()).discardState();
+        // Register shared handle for chk-2
+        stateHandle2.registerSharedStates(stateRegistry,2);
+        //  !!!! chk-1 is not completed, but the shared state of chk-1 is discarded.
+        verify(sharedState1, times(1)).discardState();
+        assertEquals(sharedStateMap1.get(id1), sharedState1);
     }
 
     @Test
