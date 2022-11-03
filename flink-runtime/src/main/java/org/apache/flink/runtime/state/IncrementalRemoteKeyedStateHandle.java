@@ -329,6 +329,7 @@ public class IncrementalRemoteKeyedStateHandle implements IncrementalKeyedStateH
             StreamStateHandle reference =
                     stateRegistry.registerReference(
                             registryKey, sharedStateHandle.getValue(), checkpointID);
+            LOG.info("Register IncrementalRemoteKeyedStateHandle" + registryKey.getKeyString() + " " + checkpointID);
 
             // This step consolidates our shared handles with the registry, which does two things:
             //

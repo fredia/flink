@@ -31,6 +31,7 @@ import org.apache.flink.changelog.fs.FsStateChangelogStorageFactory;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.configuration.StateChangelogOptions;
 import org.apache.flink.contrib.streaming.state.EmbeddedRocksDBStateBackend;
+import org.apache.flink.runtime.checkpoint.CompletedCheckpointStats;
 import org.apache.flink.runtime.checkpoint.metadata.CheckpointMetadata;
 import org.apache.flink.runtime.clusterframework.ApplicationStatus;
 import org.apache.flink.runtime.jobgraph.JobGraph;
@@ -228,7 +229,11 @@ public abstract class ChangelogRecoveryITCaseBase extends TestLogger {
         if (!mostRecentCompletedCheckpointPath.isPresent()) {
             return Collections.emptySet();
         }
-
+        CompletedCheckpointStats cp =miniCluster.getExecutionGraph(jobID).get()
+                .getCheckpointStatsSnapshot().getHistory().getLatestCompletedCheckpoint();
+        if( cp.getCheckpointId() <= 1){
+            return Collections.emptySet();
+        }
         CheckpointMetadata checkpointMetadata;
         try {
             checkpointMetadata = loadCheckpointMetadata(mostRecentCompletedCheckpointPath.get());

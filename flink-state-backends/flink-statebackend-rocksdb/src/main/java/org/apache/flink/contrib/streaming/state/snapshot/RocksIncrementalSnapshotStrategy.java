@@ -319,6 +319,7 @@ public class RocksIncrementalSnapshotStrategy<K>
 
                 return snapshotResult;
             } finally {
+                Thread.sleep(1000);
                 if (!completed) {
                     final List<StateObject> statesToDiscard =
                             new ArrayList<>(1 + miscFiles.size() + sstFiles.size());

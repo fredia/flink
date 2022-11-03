@@ -346,6 +346,7 @@ public class CheckpointCoordinator {
             throw new RuntimeException(
                     "Failed to start checkpoint ID counter: " + t.getMessage(), t);
         }
+       LOG.info("***** max concurrent checkpoint {}", chkConfig.getMaxConcurrentCheckpoints());
         this.requestDecider =
                 new CheckpointRequestDecider(
                         chkConfig.getMaxConcurrentCheckpoints(),

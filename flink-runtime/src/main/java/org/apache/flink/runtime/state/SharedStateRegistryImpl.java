@@ -130,8 +130,9 @@ public class SharedStateRegistryImpl implements SharedStateRegistry {
                         // So we use a new entry and discard the old one:
                         scheduledStateDeletion = entry.stateHandle;
                         entry.stateHandle = state;
+                        LOG.info("multiple concurrent chk: {}, {}", registrationKey.getKeyString(), checkpointID);
                     }
-                    LOG.trace(
+                    LOG.info(
                             "Identified duplicate state registration under key {}. New state {} was determined to "
                                     + "be an unnecessary copy of existing state {} and will be dropped.",
                             registrationKey,
