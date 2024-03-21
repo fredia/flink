@@ -19,6 +19,7 @@
 package org.apache.flink.api.common.state.v2;
 
 import org.apache.flink.annotation.Internal;
+import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.util.FlinkRuntimeException;
 
 import java.util.concurrent.CompletableFuture;
@@ -45,7 +46,8 @@ public class StateFutureImpl<T> implements InternalStateFuture<T> {
 
     MailboxEncapsulator mailboxEncapsulator;
 
-    StateFutureImpl(MailboxEncapsulator mailboxEncapsulator) {
+    @VisibleForTesting
+    public StateFutureImpl(MailboxEncapsulator mailboxEncapsulator) {
         this.completableFuture = new CompletableFuture<>();
         this.mailboxEncapsulator = mailboxEncapsulator;
     }
