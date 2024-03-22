@@ -54,7 +54,7 @@ public interface ListState<T> extends MergingState<T, StateIterator<T>> {
      *
      * @param values The new values for the state.
      */
-    void asyncUpdate(List<T> values);
+    StateFuture<Void> asyncUpdate(List<T> values);
 
     /**
      * Updates the operator state accessible by {@link #asyncGet()} by adding the given values to
@@ -67,5 +67,5 @@ public interface ListState<T> extends MergingState<T, StateIterator<T>> {
      *
      * @param values The new values to be added to the state.
      */
-    void asyncAddAll(List<T> values);
+    StateFuture<Void> asyncAddAll(List<T> values);
 }
