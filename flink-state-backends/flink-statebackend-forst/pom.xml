@@ -103,16 +103,11 @@ under the License.
 						<configuration>
 							<includes>
 								<include>
-									**/org/apache/flink/contrib/streaming/state/RocksDBTestUtils*
+									**/org/apache/flink/state/forst/ForStTestUtils*
 								</include>
+								<!-- Exporting ForStStateBackendConfigTest$TestOptionsFactory for pyflink tests -->
 								<include>
-									**/org/apache/flink/contrib/streaming/state/EmbeddedRocksDBStateBackendTest*
-								</include>
-								<!-- Exporting RocksDBStateBackendConfigTest$TestOptionsFactory for pyflink tests -->
-								<include>
-									**/org/apache/flink/contrib/streaming/state/RocksDBStateBackendConfigTest*
-								</include>
-								<include>**/org/apache/flink/contrib/streaming/state/benchmark/*
+									**/org/apache/flink/state/forst/ForStStateBackendConfigTest*
 								</include>
 								<include>META-INF/LICENSE</include>
 								<include>META-INF/NOTICE</include>

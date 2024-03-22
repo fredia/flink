@@ -25,8 +25,7 @@ import java.util.Iterator;
 import java.util.TreeSet;
 
 /** Implementation of a lexicographically ordered set of byte-arrays, based on a {@link TreeSet}. */
-public class TreeOrderedSetCache
-        implements RocksDBCachingPriorityQueueSet.OrderedByteArraySetCache {
+public class TreeOrderedSetCache implements ForStCachingPriorityQueueSet.OrderedByteArraySetCache {
 
     /** Maximum capacity. */
     private final int maxSize;
