@@ -40,7 +40,6 @@ import org.apache.flink.runtime.query.TaskKvStateRegistry;
 import org.apache.flink.runtime.state.CheckpointableKeyedStateBackend;
 import org.apache.flink.runtime.state.KeyGroupRange;
 import org.apache.flink.runtime.state.KeyedStateBackendParametersImpl;
-import org.apache.flink.runtime.state.filesystem.FsStateBackend;
 import org.apache.flink.runtime.state.heap.HeapPriorityQueueSetFactory;
 import org.apache.flink.runtime.state.ttl.TtlTimeProvider;
 import org.apache.flink.runtime.util.TestingTaskManagerRuntimeInfo;
@@ -85,7 +84,6 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
-import static org.mockito.Mockito.mock;
 
 /** Tests for configuring the ForSt State Backend. */
 @SuppressWarnings("serial")
@@ -787,8 +785,6 @@ public class ForStStateBackendConfigTest {
 
     @Test
     public void testRocksDbReconfigurationCopiesExistingValues() throws Exception {
-        final FsStateBackend checkpointBackend =
-                new FsStateBackend(tempFolder.newFolder().toURI().toString());
         final boolean incremental = !CheckpointingOptions.INCREMENTAL_CHECKPOINTS.defaultValue();
 
         final ForStStateBackend original = new ForStStateBackend(incremental);
@@ -798,7 +794,7 @@ public class ForStStateBackendConfigTest {
         assertNotEquals(predOptions, original.getPredefinedOptions());
         original.setPredefinedOptions(predOptions);
 
-        final ForStOptionsFactory optionsFactory = mock(ForStOptionsFactory.class);
+        final ForStOptionsFactory optionsFactory = new TestOptionsFactory();
         original.setForStOptions(optionsFactory);
 
         final String[] localDirs =
