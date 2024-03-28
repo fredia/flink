@@ -20,14 +20,22 @@ package org.apache.flink.api.common.state.v2;
 
 import org.apache.flink.annotation.Experimental;
 
+import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /** A collection of utilities that expand the usage of {@link StateFuture}. */
 @Experimental
 public class FutureUtils {
     /** Returns a completed future that does nothing and return null. */
     public static <V> StateFuture<V> completedVoidFuture() {
-        throw new UnsupportedOperationException("To be implemented.");
+        return new CompletedStateFuture<>(null);
+    }
+
+    /** Returns a completed future that does nothing and return provided result. */
+    public static <V> StateFuture<V> completedFuture(V result) {
+        return new CompletedStateFuture<>(result);
     }
 
     /**
@@ -38,8 +46,59 @@ public class FutureUtils {
      *     otherwise a IllegalArgumentException will be thrown.
      * @return The StateFuture that completes once all given futures are complete.
      */
+    @SuppressWarnings("unchecked")
     public static <T> StateFuture<Collection<T>> combineAll(
             Collection<? extends StateFuture<? extends T>> futures) {
-        throw new UnsupportedOperationException("To be implemented.");
+        int count = futures.size();
+        if (count == 0) {
+            return new CompletedStateFuture<>(Collections.emptyList());
+        } else if (count == 1) {
+            StateFuture<? extends T> firstFuture = futures.stream().findFirst().get();
+            return firstFuture.thenCompose(
+                    (t) -> FutureUtils.completedFuture(Collections.singletonList(t)));
+        }
+
+        // multiple futures
+
+        final T[] results = (T[]) new Object[count];
+
+        StateFutureImpl<? extends T> pendingFuture = null;
+        for (StateFuture<? extends T> future : futures) {
+            if (future instanceof StateFutureImpl) {
+                pendingFuture = (StateFutureImpl<? extends T>) future;
+                break;
+            }
+        }
+
+        if (pendingFuture == null) {
+            int i = 0;
+            for (StateFuture<? extends T> future : futures) {
+                final int index = i;
+                ((InternalStateFuture<? extends T>) future)
+                        .thenSyncAccept(
+                                (t) -> {
+                                    results[index] = t;
+                                });
+                i++;
+            }
+            return new CompletedStateFuture<>(Arrays.asList(results));
+        } else {
+            int i = 0;
+            AtomicInteger countDown = new AtomicInteger(count);
+            StateFutureImpl<Collection<T>> ret = pendingFuture.makeNewStateFuture();
+            for (StateFuture<? extends T> future : futures) {
+                final int index = i;
+                ((InternalStateFuture<? extends T>) future)
+                        .thenSyncAccept(
+                                (t) -> {
+                                    results[index] = t;
+                                    if (countDown.decrementAndGet() == 0) {
+                                        ret.complete(Arrays.asList(results));
+                                    }
+                                });
+                i++;
+            }
+            return ret;
+        }
     }
 }
