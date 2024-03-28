@@ -33,7 +33,7 @@ import java.util.Map;
  * automatically supplied by the system, so the function always sees the value mapped to the key of
  * the current element. That way, the system can handle stream and state partitioning consistently
  * together.
- *..
+ *
  * @param <UK> Type of the keys in the state.
  * @param <UV> Type of the values in the state.
  */

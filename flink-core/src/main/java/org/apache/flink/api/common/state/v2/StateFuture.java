@@ -40,6 +40,7 @@ public interface StateFuture<T> {
      * @return the new StateFuture
      */
     <U> StateFuture<U> thenApply(Function<? super T, ? extends U> fn);
+
     /**
      * Returns a new StateFuture that, when this future completes normally, is executed with this
      * future's result as the argument to the supplied action.
