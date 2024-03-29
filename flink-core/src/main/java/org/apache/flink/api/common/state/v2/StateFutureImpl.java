@@ -55,7 +55,7 @@ public class StateFutureImpl<T> implements InternalStateFuture<T> {
         try {
             if (completableFuture.isDone()) {
                 U r = fn.apply(completableFuture.get());
-                return FutureUtils.completedFuture(r);
+                return StateFutureUtils.completedFuture(r);
             } else {
                 StateFutureImpl<U> ret = new StateFutureImpl<>(mailboxEncapsulator);
                 completableFuture.thenAccept(
@@ -77,7 +77,7 @@ public class StateFutureImpl<T> implements InternalStateFuture<T> {
         try {
             if (completableFuture.isDone()) {
                 action.accept(completableFuture.get());
-                return FutureUtils.completedVoidFuture();
+                return StateFutureUtils.completedVoidFuture();
             } else {
                 StateFutureImpl<Void> ret = new StateFutureImpl<>(mailboxEncapsulator);
                 completableFuture.thenAccept(
@@ -126,7 +126,7 @@ public class StateFutureImpl<T> implements InternalStateFuture<T> {
                         (u) -> {
                             try {
                                 V v = fn.apply(completableFuture.get(), u);
-                                return FutureUtils.completedFuture(v);
+                                return StateFutureUtils.completedFuture(v);
                             } catch (Throwable e) {
                                 throw new FlinkRuntimeException(
                                         "Error binding or executing callback", e);

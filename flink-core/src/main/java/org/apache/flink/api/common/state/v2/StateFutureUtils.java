@@ -27,7 +27,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 /** A collection of utilities that expand the usage of {@link StateFuture}. */
 @Experimental
-public class FutureUtils {
+public class StateFutureUtils {
     /** Returns a completed future that does nothing and return null. */
     public static <V> StateFuture<V> completedVoidFuture() {
         return new CompletedStateFuture<>(null);
@@ -55,7 +55,7 @@ public class FutureUtils {
         } else if (count == 1) {
             StateFuture<? extends T> firstFuture = futures.stream().findFirst().get();
             return firstFuture.thenCompose(
-                    (t) -> FutureUtils.completedFuture(Collections.singletonList(t)));
+                    (t) -> StateFutureUtils.completedFuture(Collections.singletonList(t)));
         }
 
         // multiple futures

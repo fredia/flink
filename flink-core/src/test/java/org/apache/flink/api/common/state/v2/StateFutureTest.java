@@ -78,7 +78,7 @@ public class StateFutureTest {
                 stateFuture7,
                 (v1, v2) -> {
                     counter.addAndGet(v1 - v2);
-                    return FutureUtils.completedVoidFuture();
+                    return StateFutureUtils.completedVoidFuture();
                 });
         assertThat(counter.get()).isEqualTo(9);
         stateFuture6.complete(4);
@@ -86,7 +86,7 @@ public class StateFutureTest {
         stateFuture7.complete(4 + 9);
         assertThat(counter.get()).isEqualTo(0);
 
-        FutureUtils.completedFuture(3).thenAccept(counter::addAndGet);
+        StateFutureUtils.completedFuture(3).thenAccept(counter::addAndGet);
         assertThat(counter.get()).isEqualTo(3);
 
         counter.set(0);
@@ -94,7 +94,7 @@ public class StateFutureTest {
         for (int i = 0; i < 5; i++) {
             futures.add(new StateFutureImpl<>(runner));
         }
-        FutureUtils.combineAll(futures)
+        StateFutureUtils.combineAll(futures)
                 .thenAccept(
                         (c) -> {
                             int sum = 0;
@@ -166,7 +166,7 @@ public class StateFutureTest {
                     for (int i = 0; i < 5; i++) {
                         futures.add(valueState.get());
                     }
-                    FutureUtils.combineAll(futures)
+                    StateFutureUtils.combineAll(futures)
                             .thenCombine(
                                     valueState.get(),
                                     (c, v) -> {

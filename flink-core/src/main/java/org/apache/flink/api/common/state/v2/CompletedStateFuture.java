@@ -18,6 +18,7 @@
 
 package org.apache.flink.api.common.state.v2;
 
+import org.apache.flink.annotation.Internal;
 import org.apache.flink.util.FlinkRuntimeException;
 
 import java.util.function.BiFunction;
@@ -25,6 +26,7 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 
 /** A {@link StateFuture} that has already been completed when it is created. */
+@Internal
 public class CompletedStateFuture<T> implements InternalStateFuture<T> {
 
     T result;
@@ -36,13 +38,13 @@ public class CompletedStateFuture<T> implements InternalStateFuture<T> {
 
     @Override
     public <U> StateFuture<U> thenApply(Function<? super T, ? extends U> fn) {
-        return FutureUtils.completedFuture(fn.apply(result));
+        return StateFutureUtils.completedFuture(fn.apply(result));
     }
 
     @Override
     public StateFuture<Void> thenAccept(Consumer<? super T> action) {
         action.accept(result);
-        return FutureUtils.completedVoidFuture();
+        return StateFutureUtils.completedVoidFuture();
     }
 
     @Override
@@ -57,7 +59,7 @@ public class CompletedStateFuture<T> implements InternalStateFuture<T> {
                 (u) -> {
                     try {
                         V v = fn.apply(result, u);
-                        return FutureUtils.completedFuture(v);
+                        return StateFutureUtils.completedFuture(v);
                     } catch (Throwable e) {
                         throw new FlinkRuntimeException("Error binding or executing callback", e);
                     }

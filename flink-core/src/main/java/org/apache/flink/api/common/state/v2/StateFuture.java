@@ -25,7 +25,8 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 
 /**
- * StateFuture is a future that act as a return value for async state interfaces.
+ * StateFuture is a future that act as a return value for async state interfaces. Note: All these
+ * methods of this interface can ONLY be called within task thread.
  *
  * @param <T> The return type of this future.
  */
@@ -35,9 +36,9 @@ public interface StateFuture<T> {
      * Returns a new StateFuture that, when this future completes normally, is executed with this
      * future's result as the argument to the supplied function.
      *
-     * @param fn the function to use to compute the value of the returned StateFuture
-     * @param <U> the function's return type
-     * @return the new StateFuture
+     * @param fn the function to use to compute the value of the returned StateFuture.
+     * @param <U> the function's return type.
+     * @return the new StateFuture.
      */
     <U> StateFuture<U> thenApply(Function<? super T, ? extends U> fn);
 
@@ -45,8 +46,8 @@ public interface StateFuture<T> {
      * Returns a new StateFuture that, when this future completes normally, is executed with this
      * future's result as the argument to the supplied action.
      *
-     * @param action the action to perform before completing the returned StateFuture
-     * @return the new StateFuture
+     * @param action the action to perform before completing the returned StateFuture.
+     * @return the new StateFuture.
      */
     StateFuture<Void> thenAccept(Consumer<? super T> action);
 
@@ -54,8 +55,8 @@ public interface StateFuture<T> {
      * Returns a new future that, when this future completes normally, is executed with this future
      * as the argument to the supplied function.
      *
-     * @param action the action to perform
-     * @return the new StateFuture
+     * @param action the action to perform.
+     * @return the new StateFuture.
      */
     <U> StateFuture<U> thenCompose(Function<? super T, ? extends StateFuture<U>> action);
 
@@ -63,11 +64,11 @@ public interface StateFuture<T> {
      * Returns a new StateFuture that, when this and the other given future both complete normally,
      * is executed with the two results as arguments to the supplied function.
      *
-     * @param other the other StateFuture
-     * @param fn the function to use to compute the value of the returned StateFuture
-     * @param <U> the type of the other StateFuture's result
-     * @param <V> the function's return type
-     * @return the new StateFuture
+     * @param other the other StateFuture.
+     * @param fn the function to use to compute the value of the returned StateFuture.
+     * @param <U> the type of the other StateFuture's result.
+     * @param <V> the function's return type.
+     * @return the new StateFuture.
      */
     <U, V> StateFuture<V> thenCombine(
             StateFuture<? extends U> other, BiFunction<? super T, ? super U, ? extends V> fn);
