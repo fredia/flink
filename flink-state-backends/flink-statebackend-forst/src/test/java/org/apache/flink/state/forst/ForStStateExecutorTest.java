@@ -45,7 +45,8 @@ class ForStStateExecutorTest extends ForStDBOperationTestBase {
     @Test
     @SuppressWarnings("unchecked")
     void testExecuteValueStateRequest() throws Exception {
-        ForStStateExecutor forStStateExecutor = new ForStStateExecutor(4, db, new WriteOptions());
+        ForStStateExecutor forStStateExecutor =
+                new ForStStateExecutor(2, 2, 2, db, new WriteOptions());
         ForStValueState<Integer, String> state1 = buildForStValueState("value-state-1");
         ForStValueState<Integer, String> state2 = buildForStValueState("value-state-2");
 
@@ -61,7 +62,7 @@ class ForStStateExecutorTest extends ForStDBOperationTestBase {
                     buildStateRequest(state, StateRequestType.VALUE_UPDATE, i, "test-" + i, i * 2));
         }
 
-        forStStateExecutor.executeBatchRequests(stateRequestContainer);
+        forStStateExecutor.executeBatchRequests(stateRequestContainer).get();
 
         List<StateRequest<?, ?, ?>> checkList = new ArrayList<>();
         stateRequestContainer = forStStateExecutor.createStateRequestContainer(null);
@@ -103,7 +104,7 @@ class ForStStateExecutorTest extends ForStDBOperationTestBase {
             stateRequestContainer.offer(
                     buildStateRequest(state, StateRequestType.VALUE_UPDATE, i, null, i * 2));
         }
-        forStStateExecutor.executeBatchRequests(stateRequestContainer);
+        forStStateExecutor.executeBatchRequests(stateRequestContainer).get();
 
         // 5. Check that the deleted value is null :  keyRange [keyNum - 100, keyNum + 100)
         stateRequestContainer = forStStateExecutor.createStateRequestContainer(null);
@@ -115,7 +116,7 @@ class ForStStateExecutorTest extends ForStDBOperationTestBase {
             stateRequestContainer.offer(getRequest);
             checkList.add(getRequest);
         }
-        forStStateExecutor.executeBatchRequests(stateRequestContainer);
+        forStStateExecutor.executeBatchRequests(stateRequestContainer).get();
         for (StateRequest<?, ?, ?> getRequest : checkList) {
             assertThat(getRequest.getRequestType()).isEqualTo(StateRequestType.VALUE_GET);
             assertThat(((TestStateFuture<String>) getRequest.getFuture()).getCompletedResult())
@@ -126,7 +127,8 @@ class ForStStateExecutorTest extends ForStDBOperationTestBase {
 
     @Test
     void testExecuteMapStateRequest() throws Exception {
-        ForStStateExecutor forStStateExecutor = new ForStStateExecutor(4, db, new WriteOptions());
+        ForStStateExecutor forStStateExecutor =
+                new ForStStateExecutor(2, 2, 2, db, new WriteOptions());
         ForStMapState<Integer, String, String> state = buildForStMapState("map-state");
         StateRequestContainer stateRequestContainer =
                 forStStateExecutor.createStateRequestContainer(null);

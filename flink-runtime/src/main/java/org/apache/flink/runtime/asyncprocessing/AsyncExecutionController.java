@@ -23,9 +23,9 @@ import org.apache.flink.api.common.operators.MailboxExecutor;
 import org.apache.flink.api.common.state.v2.State;
 import org.apache.flink.core.state.InternalStateFuture;
 import org.apache.flink.core.state.StateFutureImpl.AsyncFrameworkExceptionHandler;
+import org.apache.flink.metrics.MetricGroup;
 import org.apache.flink.runtime.asyncprocessing.EpochManager.ParallelMode;
 import org.apache.flink.runtime.state.KeyGroupRangeAssignment;
-import org.apache.flink.util.Preconditions;
 import org.apache.flink.util.function.ThrowingRunnable;
 
 import org.slf4j.Logger;
@@ -77,6 +77,8 @@ public class AsyncExecutionController<K> implements StateRequestHandler {
      */
     private final MailboxExecutor mailboxExecutor;
 
+    private final BatchCallbackRunner callbackRunner;
+
     /** Exception handler to handle the exception thrown by asynchronous framework. */
     private final AsyncFrameworkExceptionHandler exceptionHandler;
 
@@ -115,6 +117,14 @@ public class AsyncExecutionController<K> implements StateRequestHandler {
      */
     final ParallelMode epochParallelMode = ParallelMode.SERIAL_BETWEEN_EPOCH;
 
+    private final Object notifyLock = new Object();
+
+    private volatile boolean waitingMail = false;
+
+    private AtomicInteger inFlightRequest;
+
+    private int inFlightRequestSnapshot = 0;
+
     public AsyncExecutionController(
             MailboxExecutor mailboxExecutor,
             AsyncFrameworkExceptionHandler exceptionHandler,
@@ -122,16 +132,19 @@ public class AsyncExecutionController<K> implements StateRequestHandler {
             int maxParallelism,
             int batchSize,
             long bufferTimeout,
-            int maxInFlightRecords) {
+            int maxInFlightRecords,
+            @Nullable MetricGroup metricGroup) {
         this.keyAccountingUnit = new KeyAccountingUnit<>(maxInFlightRecords);
         this.mailboxExecutor = mailboxExecutor;
         this.exceptionHandler = exceptionHandler;
-        this.stateFutureFactory = new StateFutureFactory<>(this, mailboxExecutor, exceptionHandler);
+        this.callbackRunner = new BatchCallbackRunner(mailboxExecutor, this::notifyNewMail);
+        this.stateFutureFactory = new StateFutureFactory<>(this, callbackRunner, exceptionHandler);
         this.stateExecutor = stateExecutor;
         this.batchSize = batchSize;
         this.bufferTimeout = bufferTimeout;
         this.maxInFlightRecordNum = maxInFlightRecords;
         this.inFlightRecordNum = new AtomicInteger(0);
+        this.inFlightRequest = new AtomicInteger(0);
         this.maxParallelism = maxParallelism;
         this.stateRequestsBuffer =
                 new StateRequestBuffer<>(
@@ -146,6 +159,12 @@ public class AsyncExecutionController<K> implements StateRequestHandler {
                                         "AEC-buffer-timeout"));
 
         this.epochManager = new EpochManager(this);
+        if (metricGroup != null) {
+            metricGroup.gauge("AEC-inFlightRecordNum", inFlightRecordNum::get);
+            metricGroup.gauge("AEC-activeBuffer", () -> stateRequestsBuffer.activeQueueSize());
+            metricGroup.gauge("AEC-blockingBuffer", () -> stateRequestsBuffer.blockingQueueSize());
+        }
+
         LOG.info(
                 "Create AsyncExecutionController: batchSize {}, bufferTimeout {}, maxInFlightRecordNum {}, epochParallelMode {}",
                 this.batchSize,
@@ -201,9 +220,7 @@ public class AsyncExecutionController<K> implements StateRequestHandler {
         RecordContext<K> nextRecordCtx =
                 stateRequestsBuffer.tryActivateOneByKey(toDispose.getKey());
         if (nextRecordCtx != null) {
-            Preconditions.checkState(
-                    tryOccupyKey(nextRecordCtx),
-                    String.format("key(%s) is already occupied.", nextRecordCtx.getKey()));
+            tryOccupyKey(nextRecordCtx);
         }
     }
 
@@ -255,6 +272,11 @@ public class AsyncExecutionController<K> implements StateRequestHandler {
         return stateFuture;
     }
 
+    @Override
+    public Runnable getRequestDisposer() {
+        return () -> inFlightRequest.decrementAndGet();
+    }
+
     <IN, OUT> void insertActiveBuffer(StateRequest<K, IN, OUT> request) {
         stateRequestsBuffer.enqueueToActive(request);
     }
@@ -273,12 +295,23 @@ public class AsyncExecutionController<K> implements StateRequestHandler {
             return;
         }
 
+        LOG.debug("in flight request, {} {}.", inFlightRequest.get(), inFlightRequestSnapshot);
+        // System.out.println("in flight request, " + inFlightRequest.get() + " " +
+        // inFlightRequestSnapshot);
+        if (inFlightRequest.get() * 2 > inFlightRequestSnapshot) {
+            return;
+        }
+
         Optional<StateRequestContainer> toRun =
                 stateRequestsBuffer.popActive(
                         batchSize, () -> stateExecutor.createStateRequestContainer(this));
         if (!toRun.isPresent() || toRun.get().isEmpty()) {
             return;
         }
+
+        inFlightRequest.addAndGet(toRun.get().size());
+        // System.out.println("run " + toRun.get().size());
+        inFlightRequestSnapshot = inFlightRequest.get();
         stateExecutor.executeBatchRequests(toRun.get());
         stateRequestsBuffer.advanceSeq();
     }
@@ -319,14 +352,37 @@ public class AsyncExecutionController<K> implements StateRequestHandler {
     public void drainInflightRecords(int targetNum) {
         try {
             while (inFlightRecordNum.get() > targetNum) {
+                // System.out.println("inflight record " + inFlightRecordNum.get());
                 if (!mailboxExecutor.tryYield()) {
                     triggerIfNeeded(true);
-                    Thread.sleep(1);
+                    waitForNewMails();
                 }
             }
-        } catch (InterruptedException ignored) {
+        } catch (Exception ignored) {
             // ignore the interrupted exception to avoid throwing fatal error when the task cancel
             // or exit.
+        }
+    }
+
+    public void waitForNewMails() throws InterruptedException {
+        if (!callbackRunner.isHasMail()) {
+            synchronized (notifyLock) {
+                if (!callbackRunner.isHasMail()) {
+                    waitingMail = true;
+                    notifyLock.wait(100);
+                    waitingMail = false;
+                }
+            }
+        }
+    }
+
+    public void notifyNewMail() {
+        if (waitingMail) {
+            synchronized (notifyLock) {
+                if (waitingMail) {
+                    notifyLock.notify();
+                }
+            }
         }
     }
 

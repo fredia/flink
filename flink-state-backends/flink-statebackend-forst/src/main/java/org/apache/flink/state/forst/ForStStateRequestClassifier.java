@@ -23,8 +23,11 @@ import org.apache.flink.runtime.asyncprocessing.StateRequestContainer;
 import org.apache.flink.runtime.asyncprocessing.StateRequestHandler;
 import org.apache.flink.runtime.asyncprocessing.StateRequestType;
 
+import org.rocksdb.RocksDB;
+
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.Executor;
 
 /**
  * The ForSt {@link StateRequestContainer} which can classify the state requests by ForStDB
@@ -40,39 +43,66 @@ public class ForStStateRequestClassifier implements StateRequestContainer {
 
     private final List<ForStDBIterRequest<?>> dbIterRequests;
 
+    private final List<StateRequest<?, ?, ?>> stateRequests;
+
     public ForStStateRequestClassifier(StateRequestHandler stateRequestHandler) {
         this.stateRequestHandler = stateRequestHandler;
         this.dbGetRequests = new ArrayList<>();
         this.dbPutRequests = new ArrayList<>();
         this.dbIterRequests = new ArrayList<>();
+        this.stateRequests = new ArrayList<>();
     }
 
     @Override
     public void offer(StateRequest<?, ?, ?> stateRequest) {
-        convertStateRequestsToForStDBRequests(stateRequest);
+        stateRequests.add(stateRequest);
+        // convertStateRequestsToForStDBRequests(stateRequest);
+    }
+
+    public List<StateRequest<?, ?, ?>> pollStateRequests() {
+        return stateRequests;
     }
 
     @Override
     public boolean isEmpty() {
-        return dbGetRequests.isEmpty() && dbPutRequests.isEmpty();
+        return stateRequests.isEmpty();
+        // return dbGetRequests.isEmpty() && dbPutRequests.isEmpty() && dbIterRequests.isEmpty();
+    }
+
+    @Override
+    public int size() {
+        return stateRequests.size();
+        // return dbGetRequests.size() + dbPutRequests.size() + dbIterRequests.size();
     }
 
     @SuppressWarnings("ConstantConditions")
-    private void convertStateRequestsToForStDBRequests(StateRequest<?, ?, ?> stateRequest) {
+    public void convertStateRequestsToForStDBRequests(
+            StateRequest<?, ?, ?> stateRequest,
+            ForStWriteBatchOperation forStWriteBatchOperation,
+            ForStGeneralMultiGetOperation forStGeneralMultiGetOperation,
+            ForStIterateOperation forStIterateOperation,
+            Executor readExecutor,
+            Executor writeExecutor,
+            Executor iterateExecutor,
+            RocksDB db) {
         StateRequestType stateRequestType = stateRequest.getRequestType();
         switch (stateRequestType) {
             case VALUE_GET:
                 {
                     ForStValueState<?, ?> forStValueState =
                             (ForStValueState<?, ?>) stateRequest.getState();
-                    dbGetRequests.add(forStValueState.buildDBGetRequest(stateRequest));
+                    forStGeneralMultiGetOperation.processSingle(
+                            forStValueState.buildDBGetRequest(stateRequest), readExecutor, db);
+                    // dbGetRequests.add(forStValueState.buildDBGetRequest(stateRequest));
                     return;
                 }
             case VALUE_UPDATE:
                 {
                     ForStValueState<?, ?> forStValueState =
                             (ForStValueState<?, ?>) stateRequest.getState();
-                    dbPutRequests.add(forStValueState.buildDBPutRequest(stateRequest));
+                    forStWriteBatchOperation.processSingle(
+                            forStValueState.buildDBPutRequest(stateRequest), writeExecutor, db);
+                    // dbPutRequests.add(forStValueState.buildDBPutRequest(stateRequest));
                     return;
                 }
             case MAP_GET:
@@ -80,7 +110,9 @@ public class ForStStateRequestClassifier implements StateRequestContainer {
                 {
                     ForStMapState<?, ?, ?> forStMapState =
                             (ForStMapState<?, ?, ?>) stateRequest.getState();
-                    dbGetRequests.add(forStMapState.buildDBGetRequest(stateRequest));
+                    forStGeneralMultiGetOperation.processSingle(
+                            forStMapState.buildDBGetRequest(stateRequest), readExecutor, db);
+                    // dbGetRequests.add(forStMapState.buildDBGetRequest(stateRequest));
                     return;
                 }
             case MAP_PUT:
@@ -88,7 +120,9 @@ public class ForStStateRequestClassifier implements StateRequestContainer {
                 {
                     ForStMapState<?, ?, ?> forStMapState =
                             (ForStMapState<?, ?, ?>) stateRequest.getState();
-                    dbPutRequests.add(forStMapState.buildDBPutRequest(stateRequest));
+                    forStWriteBatchOperation.processSingle(
+                            forStMapState.buildDBPutRequest(stateRequest), writeExecutor, db);
+                    // dbPutRequests.add(forStMapState.buildDBPutRequest(stateRequest));
                     return;
                 }
             case MAP_ITER:
@@ -98,21 +132,27 @@ public class ForStStateRequestClassifier implements StateRequestContainer {
                 {
                     ForStMapState<?, ?, ?> forStMapState =
                             (ForStMapState<?, ?, ?>) stateRequest.getState();
-                    dbIterRequests.add(forStMapState.buildDBIterRequest(stateRequest));
+                    forStIterateOperation.processSingle(
+                            forStMapState.buildDBIterRequest(stateRequest), iterateExecutor, db);
+                    // dbIterRequests.add(forStMapState.buildDBIterRequest(stateRequest));
                     return;
                 }
             case MAP_PUT_ALL:
                 {
                     ForStMapState<?, ?, ?> forStMapState =
                             (ForStMapState<?, ?, ?>) stateRequest.getState();
-                    dbPutRequests.add(forStMapState.buildDBBunchPutRequest(stateRequest));
+                    forStWriteBatchOperation.processSingle(
+                            forStMapState.buildDBBunchPutRequest(stateRequest), writeExecutor, db);
+                    // dbPutRequests.add(forStMapState.buildDBBunchPutRequest(stateRequest));
                     return;
                 }
             case MAP_IS_EMPTY:
                 {
                     ForStMapState<?, ?, ?> forStMapState =
                             (ForStMapState<?, ?, ?>) stateRequest.getState();
-                    dbGetRequests.add(forStMapState.buildDBGetRequest(stateRequest));
+                    forStGeneralMultiGetOperation.processSingle(
+                            forStMapState.buildDBGetRequest(stateRequest), readExecutor, db);
+                    // dbGetRequests.add(forStMapState.buildDBGetRequest(stateRequest));
                     return;
                 }
             case CLEAR:
@@ -120,12 +160,18 @@ public class ForStStateRequestClassifier implements StateRequestContainer {
                     if (stateRequest.getState() instanceof ForStValueState) {
                         ForStValueState<?, ?> forStValueState =
                                 (ForStValueState<?, ?>) stateRequest.getState();
-                        dbPutRequests.add(forStValueState.buildDBPutRequest(stateRequest));
+                        forStWriteBatchOperation.processSingle(
+                                forStValueState.buildDBPutRequest(stateRequest), writeExecutor, db);
+                        // dbPutRequests.add(forStValueState.buildDBPutRequest(stateRequest));
                         return;
                     } else if (stateRequest.getState() instanceof ForStMapState) {
                         ForStMapState<?, ?, ?> forStMapState =
                                 (ForStMapState<?, ?, ?>) stateRequest.getState();
-                        dbPutRequests.add(forStMapState.buildDBBunchPutRequest(stateRequest));
+                        forStWriteBatchOperation.processSingle(
+                                forStMapState.buildDBBunchPutRequest(stateRequest),
+                                writeExecutor,
+                                db);
+                        // dbPutRequests.add(forStMapState.buildDBBunchPutRequest(stateRequest));
                         return;
                     } else {
                         throw new UnsupportedOperationException(

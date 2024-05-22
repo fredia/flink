@@ -62,6 +62,8 @@ public class ForStMapState<K, UK, UV> extends InternalMapState<K, UK, UV>
     /** The data outputStream used for value serializer, which should be thread-safe. */
     final ThreadLocal<DataOutputSerializer> valueSerializerView;
 
+    final ThreadLocal<DataOutputSerializer> userKeySerializerView;
+
     final ThreadLocal<DataInputDeserializer> keyDeserializerView;
 
     /** The data inputStream used for value deserializer, which should be thread-safe. */
@@ -89,6 +91,7 @@ public class ForStMapState<K, UK, UV> extends InternalMapState<K, UK, UV>
         this.columnFamilyHandle = columnFamily;
         this.serializedKeyBuilder = ThreadLocal.withInitial(serializedKeyBuilderInitializer);
         this.valueSerializerView = ThreadLocal.withInitial(valueSerializerViewInitializer);
+        this.userKeySerializerView = ThreadLocal.withInitial(valueSerializerViewInitializer);
         this.keyDeserializerView = ThreadLocal.withInitial(keyDeserializerViewInitializer);
         this.valueDeserializerView = ThreadLocal.withInitial(valueDeserializerViewInitializer);
         this.userKeySerializer = stateDescriptor.getUserKeySerializer();
@@ -106,18 +109,27 @@ public class ForStMapState<K, UK, UV> extends InternalMapState<K, UK, UV>
 
     @Override
     public byte[] serializeKey(ContextKey<K> contextKey) throws IOException {
-        contextKey.resetExtra();
-        return contextKey.getOrCreateSerializedKey(
-                ctxKey -> {
-                    SerializedCompositeKeyBuilder<K> builder = serializedKeyBuilder.get();
-                    builder.setKeyAndKeyGroup(ctxKey.getRawKey(), ctxKey.getKeyGroup());
-                    builder.setNamespace(VoidNamespace.get(), VoidNamespaceSerializer.INSTANCE);
-                    if (contextKey.getUserKey() == null) {
-                        return builder.build();
-                    }
-                    UK userKey = (UK) contextKey.getUserKey();
-                    return builder.buildCompositeKeyUserKey(userKey, userKeySerializer);
-                });
+        byte[] primaryKey;
+        if (contextKey.getExtra() != null) {
+            primaryKey = (byte[]) contextKey.getExtra();
+        } else {
+            SerializedCompositeKeyBuilder<K> builder = serializedKeyBuilder.get();
+            builder.setKeyAndKeyGroup(contextKey.getRawKey(), contextKey.getKeyGroup());
+            builder.setNamespace(VoidNamespace.get(), VoidNamespaceSerializer.INSTANCE);
+            primaryKey = builder.build();
+            contextKey.setExtra(primaryKey);
+        }
+
+        if (contextKey.getUserKey() == null) {
+            return primaryKey;
+        }
+
+        DataOutputSerializer outputView = userKeySerializerView.get();
+        outputView.clear();
+        outputView.write(primaryKey, 0, primaryKey.length);
+        UK userKey = (UK) contextKey.getUserKey();
+        userKeySerializer.serialize(userKey, outputView);
+        return outputView.getCopyOfBuffer();
     }
 
     @Override
@@ -158,29 +170,29 @@ public class ForStMapState<K, UK, UV> extends InternalMapState<K, UK, UV>
                 this,
                 stateRequest.getFuture(),
                 stateRequest.getRequestType() != StateRequestType.MAP_GET,
-                stateRequest.getRequestType() == StateRequestType.MAP_IS_EMPTY);
+                stateRequest.getRequestType() == StateRequestType.MAP_IS_EMPTY,
+                stateRequestHandler.getRequestDisposer());
     }
 
     @Override
     @SuppressWarnings("rawtypes")
     public ForStDBPutRequest<ContextKey<K>, UV> buildDBPutRequest(
             StateRequest<?, ?, ?> stateRequest) {
-        Preconditions.checkArgument(
-                stateRequest.getRequestType() == StateRequestType.MAP_PUT
-                        || stateRequest.getRequestType() == StateRequestType.MAP_REMOVE);
         ContextKey<K> contextKey =
                 new ContextKey<>(
                         (RecordContext<K>) stateRequest.getRecordContext(),
                         ((Tuple2<UK, UV>) stateRequest.getPayload()).f0);
-        Preconditions.checkNotNull(
-                stateRequest.getPayload(), String.format("payload is null, %s", stateRequest));
         UV value = null;
         if (stateRequest.getRequestType() == StateRequestType.MAP_PUT) {
             value = ((Tuple2<UK, UV>) stateRequest.getPayload()).f1;
         }
 
         return ForStDBPutRequest.of(
-                contextKey, value, this, (InternalStateFuture<Void>) stateRequest.getFuture());
+                contextKey,
+                value,
+                this,
+                (InternalStateFuture<Void>) stateRequest.getFuture(),
+                stateRequestHandler.getRequestDisposer());
     }
 
     /**
@@ -193,13 +205,15 @@ public class ForStMapState<K, UK, UV> extends InternalMapState<K, UK, UV>
     @SuppressWarnings("rawtypes")
     public ForStDBBunchPutRequest<ContextKey<K>> buildDBBunchPutRequest(
             StateRequest<?, ?, ?> stateRequest) {
-        Preconditions.checkArgument(
-                stateRequest.getRequestType() == StateRequestType.MAP_PUT_ALL
-                        || stateRequest.getRequestType() == StateRequestType.CLEAR);
         ContextKey<K> contextKey =
                 new ContextKey<>((RecordContext<K>) stateRequest.getRecordContext(), null);
         Map<UK, UV> value = (Map<UK, UV>) stateRequest.getPayload();
-        return new ForStDBBunchPutRequest(contextKey, value, this, stateRequest.getFuture());
+        return new ForStDBBunchPutRequest(
+                contextKey,
+                value,
+                this,
+                stateRequest.getFuture(),
+                stateRequestHandler.getRequestDisposer());
     }
 
     /**
@@ -247,7 +261,8 @@ public class ForStMapState<K, UK, UV> extends InternalMapState<K, UK, UV>
                 this,
                 stateRequestHandler,
                 stateRequest.getFuture(),
-                seekBytes);
+                seekBytes,
+                stateRequestHandler.getRequestDisposer());
     }
 
     static <UK, UV, K, SV, S extends State> S create(

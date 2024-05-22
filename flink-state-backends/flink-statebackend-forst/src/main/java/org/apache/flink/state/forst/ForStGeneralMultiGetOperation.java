@@ -51,6 +51,36 @@ public class ForStGeneralMultiGetOperation implements ForStDBOperation {
         this.executor = executor;
     }
 
+    public void processSingle(ForStDBGetRequest<?, ?> request, Executor executor, RocksDB db) {
+        executor.execute(
+                () -> {
+                    RocksIterator iter = null;
+                    try {
+                        byte[] key = request.buildSerializedKey();
+                        if (request.checkMapEmpty()) {
+                            iter = db.newIterator(request.getColumnFamilyHandle());
+                            iter.seek(key);
+                            if (iter.isValid()
+                                    && startWithKeyPrefix(
+                                            key, iter.key(), request.getKeyGroupPrefixBytes())) {
+                                request.completeStateFuture(new byte[0]);
+                            } else {
+                                request.completeStateFuture(null);
+                            }
+                        } else {
+                            byte[] value = db.get(request.getColumnFamilyHandle(), key);
+                            request.completeStateFuture(value);
+                        }
+                    } catch (Exception e) {
+                        LOG.warn("Error when process general multiGet operation for forStDB", e);
+                    } finally {
+                        if (iter != null) {
+                            iter.close();
+                        }
+                    }
+                });
+    }
+
     @Override
     public CompletableFuture<Void> process() {
 

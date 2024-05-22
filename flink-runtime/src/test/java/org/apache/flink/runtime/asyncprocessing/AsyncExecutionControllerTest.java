@@ -96,7 +96,8 @@ class AsyncExecutionControllerTest {
                         128,
                         batchSize,
                         timeout,
-                        maxInFlight);
+                        maxInFlight,
+                        null);
         asyncKeyedStateBackend.setup(aec);
 
         try {
@@ -722,10 +723,10 @@ class AsyncExecutionControllerTest {
 
         @Override
         @SuppressWarnings({"unchecked", "rawtypes"})
-        public CompletableFuture<Void> executeBatchRequests(
+        public CompletableFuture<Integer> executeBatchRequests(
                 StateRequestContainer stateRequestContainer) {
             Preconditions.checkArgument(stateRequestContainer instanceof MockStateRequestContainer);
-            CompletableFuture<Void> future = new CompletableFuture<>();
+            CompletableFuture<Integer> future = new CompletableFuture<>();
             for (StateRequest request :
                     ((MockStateRequestContainer) stateRequestContainer).getStateRequestList()) {
                 if (request.getRequestType() == StateRequestType.VALUE_GET) {
@@ -746,7 +747,7 @@ class AsyncExecutionControllerTest {
                     throw new UnsupportedOperationException("Unsupported request type");
                 }
             }
-            future.complete(null);
+            future.complete(stateRequestContainer.size());
             return future;
         }
 

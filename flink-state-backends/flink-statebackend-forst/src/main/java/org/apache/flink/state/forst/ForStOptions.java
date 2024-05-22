@@ -130,4 +130,24 @@ public class ForStOptions {
                                             + "the partitions that are required to perform the index/filter query. "
                                             + "This option only has an effect when '%s' or '%s' are configured.",
                                     USE_MANAGED_MEMORY.key(), FIX_PER_SLOT_MEMORY_SIZE.key()));
+
+    public static final ConfigOption<Integer> EXECUTOR_READ_IO_PARALLELISM =
+            ConfigOptions.key("state.backend.forst.memory.executor-read-io-parallelism")
+                    .intType()
+                    .defaultValue(4)
+                    .withDescription(
+                            "The number of threads used for IO operations in the executor.");
+    public static final ConfigOption<Integer> EXECUTOR_WRITE_IO_PARALLELISM =
+            ConfigOptions.key("state.backend.forst.memory.executor-write-io-parallelism")
+                    .intType()
+                    .defaultValue(4)
+                    .withDescription(
+                            "The number of threads used for IO operations in the executor.");
+
+    public static final ConfigOption<Integer> EXECUTOR_ITER_IO_PARALLELISM =
+            ConfigOptions.key("state.backend.forst.memory.executor-iter-io-parallelism")
+                    .intType()
+                    .defaultValue(4)
+                    .withDescription(
+                            "The number of threads used for IO operations in the executor.");
 }

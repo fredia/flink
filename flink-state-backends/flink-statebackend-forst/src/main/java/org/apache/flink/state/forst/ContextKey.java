@@ -41,6 +41,7 @@ public class ContextKey<K> {
 
     public ContextKey(RecordContext<K> recordContext) {
         this.recordContext = recordContext;
+        this.userKey = null;
     }
 
     public ContextKey(RecordContext<K> recordContext, Object userKey) {
@@ -62,11 +63,14 @@ public class ContextKey<K> {
 
     public void setUserKey(Object userKey) {
         this.userKey = userKey;
-        resetExtra();
     }
 
-    public void resetExtra() {
-        recordContext.setExtra(null);
+    public Object getExtra() {
+        return recordContext.getExtra();
+    }
+
+    public void setExtra(Object extra) {
+        recordContext.setExtra(extra);
     }
 
     /**

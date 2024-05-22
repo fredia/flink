@@ -21,9 +21,10 @@ import org.apache.flink.api.common.state.v2.State;
 import org.apache.flink.api.common.state.v2.StateIterator;
 import org.apache.flink.core.state.InternalStateFuture;
 import org.apache.flink.runtime.asyncprocessing.StateRequestHandler;
-import org.apache.flink.util.Preconditions;
 
 import org.rocksdb.ColumnFamilyHandle;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nonnull;
 
@@ -35,6 +36,8 @@ import java.io.IOException;
  * @param <T> The type of value in iterator returned by get request.
  */
 public class ForStDBIterRequest<T> {
+
+    private final Logger LOG = LoggerFactory.getLogger(getClass());
 
     /** The type of result returned by iterator. */
     public enum ResultType {
@@ -67,13 +70,18 @@ public class ForStDBIterRequest<T> {
     /** The bytes to seek to. If null, seek start from the {@link #getKeyPrefixBytes}. */
     private final byte[] toSeekBytes;
 
+    private Runnable disposer;
+
+    long enterTime;
+
     public ForStDBIterRequest(
             ResultType type,
             ContextKey contextKey,
             ForStMapState table,
             StateRequestHandler stateRequestHandler,
             InternalStateFuture<StateIterator<T>> future,
-            byte[] toSeekBytes) {
+            byte[] toSeekBytes,
+            Runnable disposer) {
         this.resultType = type;
         this.contextKey = contextKey;
         this.table = table;
@@ -81,6 +89,8 @@ public class ForStDBIterRequest<T> {
         this.future = future;
         this.keyGroupPrefixBytes = table.getKeyGroupPrefixBytes();
         this.toSeekBytes = toSeekBytes;
+        this.disposer = disposer;
+        this.enterTime = System.nanoTime();
     }
 
     public int getKeyGroupPrefixBytes() {
@@ -100,7 +110,7 @@ public class ForStDBIterRequest<T> {
     }
 
     public byte[] getKeyPrefixBytes() throws IOException {
-        Preconditions.checkState(contextKey.getUserKey() == null);
+        // contextKey.setUserKey(null);
         return table.serializeKey(contextKey);
     }
 
@@ -123,6 +133,10 @@ public class ForStDBIterRequest<T> {
     }
 
     public void completeStateFuture(StateIterator<T> iterator) throws IOException {
+        if (disposer != null) {
+            disposer.run();
+        }
+        LOG.debug("IterRequest {},", System.nanoTime() - enterTime);
         future.complete(iterator);
     }
 }

@@ -21,6 +21,8 @@ package org.apache.flink.state.forst;
 import org.apache.flink.core.state.InternalStateFuture;
 
 import org.rocksdb.ColumnFamilyHandle;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 
@@ -32,6 +34,8 @@ import java.io.IOException;
  */
 public class ForStDBGetRequest<K, V> {
 
+    final Logger LOG = LoggerFactory.getLogger(getClass());
+
     private final K key;
     private final ForStInnerTable<K, V> table;
     private final InternalStateFuture future;
@@ -41,20 +45,27 @@ public class ForStDBGetRequest<K, V> {
 
     private int keyGroupPrefixBytes = 1;
 
+    private final Runnable disposer;
+
+    long enterTime;
+
     private ForStDBGetRequest(
             K key,
             ForStInnerTable<K, V> table,
             InternalStateFuture future,
             boolean toBoolean,
-            boolean checkMapEmpty) {
+            boolean checkMapEmpty,
+            Runnable disposer) {
         this.key = key;
         this.table = table;
         this.future = future;
         this.toBoolean = toBoolean;
         this.checkMapEmpty = checkMapEmpty;
+        this.disposer = disposer;
         if (table instanceof ForStMapState) {
             keyGroupPrefixBytes = ((ForStMapState) table).getKeyGroupPrefixBytes();
         }
+        this.enterTime = System.nanoTime();
     }
 
     public int getKeyGroupPrefixBytes() {
@@ -75,7 +86,11 @@ public class ForStDBGetRequest<K, V> {
 
     @SuppressWarnings("rawtypes")
     public void completeStateFuture(byte[] bytesValue) throws IOException {
+        if (disposer != null) {
+            disposer.run();
+        }
         if (toBoolean) {
+            LOG.debug("GetRequest boolean {},", System.nanoTime() - enterTime);
             if (checkMapEmpty) {
                 ((InternalStateFuture<Boolean>) future).complete(bytesValue == null);
                 return;
@@ -84,16 +99,18 @@ public class ForStDBGetRequest<K, V> {
             return;
         }
         if (bytesValue == null) {
+            LOG.debug("GetRequest null {},", System.nanoTime() - enterTime);
             ((InternalStateFuture<V>) future).complete(null);
             return;
         }
         V value = table.deserializeValue(bytesValue);
+        LOG.debug("GetRequest deser {},", System.nanoTime() - enterTime);
         ((InternalStateFuture<V>) future).complete(value);
     }
 
     static <K, V> ForStDBGetRequest<K, V> of(
-            K key, ForStInnerTable<K, V> table, InternalStateFuture<V> future) {
-        return new ForStDBGetRequest<>(key, table, future, false, false);
+            K key, ForStInnerTable<K, V> table, InternalStateFuture<V> future, Runnable disposer) {
+        return new ForStDBGetRequest<>(key, table, future, false, false, disposer);
     }
 
     @SuppressWarnings("rawtypes")
@@ -102,7 +119,8 @@ public class ForStDBGetRequest<K, V> {
             ForStInnerTable<K, V> table,
             InternalStateFuture future,
             boolean toBoolean,
-            boolean checkMapEmpty) {
-        return new ForStDBGetRequest<>(key, table, future, toBoolean, checkMapEmpty);
+            boolean checkMapEmpty,
+            Runnable disposer) {
+        return new ForStDBGetRequest<>(key, table, future, toBoolean, checkMapEmpty, disposer);
     }
 }

@@ -21,6 +21,8 @@ package org.apache.flink.state.forst;
 import org.apache.flink.core.state.InternalStateFuture;
 
 import org.rocksdb.ColumnFamilyHandle;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nullable;
 
@@ -34,6 +36,7 @@ import java.util.Map;
  * @param <V> The type of value in put access request.
  */
 public class ForStDBPutRequest<K, V> {
+    final Logger LOG = LoggerFactory.getLogger(getClass());
 
     protected final K key;
 
@@ -45,13 +48,23 @@ public class ForStDBPutRequest<K, V> {
 
     protected final boolean tableIsMap;
 
+    private Runnable disposer;
+
+    long enterTime;
+
     protected ForStDBPutRequest(
-            K key, V value, ForStInnerTable<K, V> table, InternalStateFuture<Void> future) {
+            K key,
+            V value,
+            ForStInnerTable<K, V> table,
+            InternalStateFuture<Void> future,
+            Runnable disposer) {
         this.key = key;
         this.value = value;
         this.table = table;
         this.future = future;
         this.tableIsMap = table instanceof ForStMapState;
+        this.disposer = disposer;
+        this.enterTime = System.nanoTime();
     }
 
     public boolean valueIsNull() {
@@ -76,7 +89,11 @@ public class ForStDBPutRequest<K, V> {
     }
 
     public void completeStateFuture() {
+        if (disposer != null) {
+            disposer.run();
+        }
         future.complete(null);
+        LOG.debug("PutRequest cost {}", System.nanoTime() - enterTime);
     }
 
     /**
@@ -87,7 +104,8 @@ public class ForStDBPutRequest<K, V> {
             K key,
             @Nullable V value,
             ForStInnerTable<K, V> table,
-            InternalStateFuture<Void> future) {
-        return new ForStDBPutRequest<>(key, value, table, future);
+            InternalStateFuture<Void> future,
+            Runnable disposer) {
+        return new ForStDBPutRequest<>(key, value, table, future, disposer);
     }
 }

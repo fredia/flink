@@ -27,6 +27,7 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.Executor;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /** The writeBatch operation implementation for ForStDB. */
 public class ForStWriteBatchOperation implements ForStDBOperation {
@@ -50,13 +51,61 @@ public class ForStWriteBatchOperation implements ForStDBOperation {
         this.executor = executor;
     }
 
+    public static void processSingle(
+            ForStDBPutRequest<?, ?> request, Executor executor, RocksDB db) {
+        executor.execute(
+                () -> {
+                    try {
+                        ColumnFamilyHandle cf = request.getColumnFamilyHandle();
+                        if (request.valueIsNull()) {
+                            if (request instanceof ForStDBBunchPutRequest) {
+                                ForStDBBunchPutRequest<?> bunchPutRequest =
+                                        (ForStDBBunchPutRequest<?>) request;
+                                byte[] primaryKey = bunchPutRequest.buildSerializedKey(null);
+                                byte[] endKey = ForStDBBunchPutRequest.nextBytes(primaryKey);
+
+                                // use deleteRange delete all records under the primary key
+                                db.deleteRange(request.getColumnFamilyHandle(), primaryKey, endKey);
+                            } else {
+                                // put(key, null) == delete(key)
+                                db.delete(
+                                        request.getColumnFamilyHandle(),
+                                        request.buildSerializedKey());
+                            }
+                        } else if (!request.valueIsMap()) {
+                            byte[] key = request.buildSerializedKey();
+                            byte[] value = request.buildSerializedValue();
+                            db.put(cf, key, value);
+                        } else {
+                            ForStDBBunchPutRequest<?> bunchPutRequest =
+                                    (ForStDBBunchPutRequest<?>) request;
+
+                            for (Map.Entry<?, ?> entry :
+                                    bunchPutRequest.getBunchValue().entrySet()) {
+                                byte[] key = bunchPutRequest.buildSerializedKey(entry.getKey());
+                                byte[] value =
+                                        bunchPutRequest.buildSerializedValue(entry.getValue());
+                                db.put(cf, key, value);
+                            }
+                        }
+                    } catch (Exception e) {
+                        throw new CompletionException("Error while adding data to ForStDB", e);
+                    } finally {
+                        request.completeStateFuture();
+                    }
+                });
+    }
+
     @Override
     public CompletableFuture<Void> process() {
-        return CompletableFuture.runAsync(
-                () -> {
-                    try (ForStDBWriteBatchWrapper writeBatch =
-                            new ForStDBWriteBatchWrapper(db, writeOptions, batchRequest.size())) {
-                        for (ForStDBPutRequest<?, ?> request : batchRequest) {
+        CompletableFuture<Void> future = new CompletableFuture<>();
+
+        AtomicInteger counter = new AtomicInteger(batchRequest.size());
+        for (int id = 0; id < batchRequest.size(); id++) {
+            ForStDBPutRequest<?, ?> request = batchRequest.get(id);
+            executor.execute(
+                    () -> {
+                        try {
                             ColumnFamilyHandle cf = request.getColumnFamilyHandle();
                             if (request.valueIsNull()) {
                                 if (request instanceof ForStDBBunchPutRequest) {
@@ -70,14 +119,14 @@ public class ForStWriteBatchOperation implements ForStDBOperation {
                                             request.getColumnFamilyHandle(), primaryKey, endKey);
                                 } else {
                                     // put(key, null) == delete(key)
-                                    writeBatch.remove(
+                                    db.delete(
                                             request.getColumnFamilyHandle(),
                                             request.buildSerializedKey());
                                 }
                             } else if (!request.valueIsMap()) {
                                 byte[] key = request.buildSerializedKey();
                                 byte[] value = request.buildSerializedValue();
-                                writeBatch.put(cf, key, value);
+                                db.put(cf, key, value);
                             } else {
                                 ForStDBBunchPutRequest<?> bunchPutRequest =
                                         (ForStDBBunchPutRequest<?>) request;
@@ -87,18 +136,20 @@ public class ForStWriteBatchOperation implements ForStDBOperation {
                                     byte[] key = bunchPutRequest.buildSerializedKey(entry.getKey());
                                     byte[] value =
                                             bunchPutRequest.buildSerializedValue(entry.getValue());
-                                    writeBatch.put(cf, key, value);
+                                    db.put(cf, key, value);
                                 }
                             }
-                        }
-                        writeBatch.flush();
-                        for (ForStDBPutRequest<?, ?> request : batchRequest) {
+                        } catch (Exception e) {
+                            throw new CompletionException("Error while adding data to ForStDB", e);
+                        } finally {
                             request.completeStateFuture();
+                            if (counter.decrementAndGet() == 0
+                                    && !future.isCompletedExceptionally()) {
+                                future.complete(null);
+                            }
                         }
-                    } catch (Exception e) {
-                        throw new CompletionException("Error while adding data to ForStDB", e);
-                    }
-                },
-                executor);
+                    });
+        }
+        return future;
     }
 }

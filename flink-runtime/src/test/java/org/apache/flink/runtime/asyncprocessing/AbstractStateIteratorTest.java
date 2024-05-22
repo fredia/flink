@@ -46,7 +46,14 @@ public class AbstractStateIteratorTest {
         TestIteratorStateExecutor stateExecutor = new TestIteratorStateExecutor(100, 3);
         AsyncExecutionController aec =
                 new AsyncExecutionController(
-                        new SyncMailboxExecutor(), (a, b) -> {}, stateExecutor, 1, 100, 1000, 1);
+                        new SyncMailboxExecutor(),
+                        (a, b) -> {},
+                        stateExecutor,
+                        1,
+                        100,
+                        1000,
+                        1,
+                        null);
         stateExecutor.bindAec(aec);
         RecordContext<String> recordContext = aec.buildContext("1", "key1");
         aec.setCurrentContext(recordContext);
@@ -77,7 +84,14 @@ public class AbstractStateIteratorTest {
         TestIteratorStateExecutor stateExecutor = new TestIteratorStateExecutor(100, 3);
         AsyncExecutionController aec =
                 new AsyncExecutionController(
-                        new SyncMailboxExecutor(), (a, b) -> {}, stateExecutor, 1, 100, 1000, 1);
+                        new SyncMailboxExecutor(),
+                        (a, b) -> {},
+                        stateExecutor,
+                        1,
+                        100,
+                        1000,
+                        1,
+                        null);
         stateExecutor.bindAec(aec);
         RecordContext<String> recordContext = aec.buildContext("1", "key1");
         aec.setCurrentContext(recordContext);
@@ -137,10 +151,10 @@ public class AbstractStateIteratorTest {
 
         @Override
         @SuppressWarnings({"unchecked", "rawtypes"})
-        public CompletableFuture<Void> executeBatchRequests(
+        public CompletableFuture<Integer> executeBatchRequests(
                 StateRequestContainer stateRequestContainer) {
             Preconditions.checkArgument(stateRequestContainer instanceof MockStateRequestContainer);
-            CompletableFuture<Void> future = new CompletableFuture<>();
+            CompletableFuture<Integer> future = new CompletableFuture<>();
             for (StateRequest request :
                     ((MockStateRequestContainer) stateRequestContainer).getStateRequestList()) {
                 if (request.getRequestType() == StateRequestType.MAP_ITER) {
@@ -178,7 +192,7 @@ public class AbstractStateIteratorTest {
                 }
                 processedCount.incrementAndGet();
             }
-            future.complete(null);
+            future.complete(stateRequestContainer.size());
             return future;
         }
 
