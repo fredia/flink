@@ -23,6 +23,7 @@ import org.apache.flink.api.common.operators.MailboxExecutor;
 import org.apache.flink.api.common.state.v2.State;
 import org.apache.flink.core.state.InternalStateFuture;
 import org.apache.flink.core.state.StateFutureImpl.AsyncFrameworkExceptionHandler;
+import org.apache.flink.metrics.MetricGroup;
 import org.apache.flink.runtime.asyncprocessing.EpochManager.ParallelMode;
 import org.apache.flink.runtime.state.KeyGroupRangeAssignment;
 import org.apache.flink.util.function.ThrowingRunnable;
@@ -120,6 +121,10 @@ public class AsyncExecutionController<K> implements StateRequestHandler {
 
     private volatile boolean waitingMail = false;
 
+    private AtomicInteger inFlightRequest;
+
+    private int inFlightRequestSnapshot = 0;
+
     public AsyncExecutionController(
             MailboxExecutor mailboxExecutor,
             AsyncFrameworkExceptionHandler exceptionHandler,
@@ -127,7 +132,8 @@ public class AsyncExecutionController<K> implements StateRequestHandler {
             int maxParallelism,
             int batchSize,
             long bufferTimeout,
-            int maxInFlightRecords) {
+            int maxInFlightRecords,
+            @Nullable MetricGroup metricGroup) {
         this.keyAccountingUnit = new KeyAccountingUnit<>(maxInFlightRecords);
         this.mailboxExecutor = mailboxExecutor;
         this.exceptionHandler = exceptionHandler;
@@ -138,6 +144,7 @@ public class AsyncExecutionController<K> implements StateRequestHandler {
         this.bufferTimeout = bufferTimeout;
         this.maxInFlightRecordNum = maxInFlightRecords;
         this.inFlightRecordNum = new AtomicInteger(0);
+        this.inFlightRequest = new AtomicInteger(0);
         this.maxParallelism = maxParallelism;
         this.stateRequestsBuffer =
                 new StateRequestBuffer<>(
@@ -152,6 +159,12 @@ public class AsyncExecutionController<K> implements StateRequestHandler {
                                         "AEC-buffer-timeout"));
 
         this.epochManager = new EpochManager(this);
+        if (metricGroup != null) {
+            metricGroup.gauge("AEC-inFlightRecordNum", inFlightRecordNum::get);
+            metricGroup.gauge("AEC-activeBuffer", () -> stateRequestsBuffer.activeQueueSize());
+            metricGroup.gauge("AEC-blockingBuffer", () -> stateRequestsBuffer.blockingQueueSize());
+        }
+
         LOG.info(
                 "Create AsyncExecutionController: batchSize {}, bufferTimeout {}, maxInFlightRecordNum {}, epochParallelMode {}",
                 this.batchSize,
@@ -283,7 +296,16 @@ public class AsyncExecutionController<K> implements StateRequestHandler {
         if (!toRun.isPresent() || toRun.get().isEmpty()) {
             return;
         }
-        stateExecutor.executeBatchRequests(toRun.get());
+
+        if (inFlightRequest.get() * 2 > inFlightRequestSnapshot) {
+            return;
+        }
+
+        inFlightRequest.addAndGet(toRun.get().size());
+        inFlightRequestSnapshot = inFlightRequest.get();
+        stateExecutor
+                .executeBatchRequests(toRun.get())
+                .whenComplete((v, e) -> inFlightRequest.addAndGet(-v));
         stateRequestsBuffer.advanceSeq();
     }
 
@@ -339,7 +361,7 @@ public class AsyncExecutionController<K> implements StateRequestHandler {
             synchronized (notifyLock) {
                 if (!callbackRunner.isHasMail()) {
                     waitingMail = true;
-                    notifyLock.wait(1);
+                    notifyLock.wait(100);
                     waitingMail = false;
                 }
             }

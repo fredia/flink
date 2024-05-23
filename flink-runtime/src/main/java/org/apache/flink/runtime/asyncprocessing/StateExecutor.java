@@ -32,7 +32,7 @@ public interface StateExecutor {
      *     processing requests.
      * @return A future can determine whether execution has completed.
      */
-    CompletableFuture<Void> executeBatchRequests(StateRequestContainer stateRequestContainer);
+    CompletableFuture<Integer> executeBatchRequests(StateRequestContainer stateRequestContainer);
 
     /**
      * Create a {@link StateRequestContainer} which is used to hold the batched {@link

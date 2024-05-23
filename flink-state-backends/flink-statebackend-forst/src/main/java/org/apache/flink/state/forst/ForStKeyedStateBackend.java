@@ -163,6 +163,7 @@ public class ForStKeyedStateBackend<K> implements AsyncKeyedStateBackend {
     @Override
     @Nonnull
     public StateExecutor createStateExecutor() {
+        LOG.info("Creating ForSt State Executor. {}", optionsContainer.getIoParallelism());
         return new ForStStateExecutor(
                 optionsContainer.getIoParallelism(), db, optionsContainer.getWriteOptions());
     }

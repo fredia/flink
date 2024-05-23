@@ -33,7 +33,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  */
 public class BatchCallbackRunner {
 
-    private static final int DEFAULT_BATCH_SIZE = 3000;
+    private static final int DEFAULT_BATCH_SIZE = 100;
 
     private final MailboxExecutor mailboxExecutor;
 

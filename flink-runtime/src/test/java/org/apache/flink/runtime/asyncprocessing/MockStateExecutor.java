@@ -26,14 +26,14 @@ import java.util.concurrent.CompletableFuture;
 public class MockStateExecutor implements StateExecutor {
 
     @Override
-    public CompletableFuture<Void> executeBatchRequests(
+    public CompletableFuture<Integer> executeBatchRequests(
             StateRequestContainer stateRequestContainer) {
         Preconditions.checkArgument(stateRequestContainer instanceof MockStateRequestContainer);
         for (StateRequest<?, ?, ?> request :
                 ((MockStateRequestContainer) stateRequestContainer).getStateRequestList()) {
             request.getFuture().complete(null);
         }
-        return CompletableFuture.completedFuture(null);
+        return CompletableFuture.completedFuture(stateRequestContainer.size());
     }
 
     @Override

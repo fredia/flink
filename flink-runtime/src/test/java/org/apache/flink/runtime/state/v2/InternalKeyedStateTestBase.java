@@ -69,7 +69,8 @@ public class InternalKeyedStateTestBase {
                         1,
                         1,
                         1000,
-                        1);
+                        1,
+                        null);
         exception = new AtomicReference<>(null);
     }
 
@@ -165,11 +166,11 @@ public class InternalKeyedStateTestBase {
         }
 
         @Override
-        public CompletableFuture<Void> executeBatchRequests(
+        public CompletableFuture<Integer> executeBatchRequests(
                 StateRequestContainer stateRequestContainer) {
             receivedRequest.addAll(((TestStateRequestContainer) stateRequestContainer).requests);
-            CompletableFuture<Void> future = new CompletableFuture<>();
-            future.complete(null);
+            CompletableFuture<Integer> future = new CompletableFuture<>();
+            future.complete(stateRequestContainer.size());
             return future;
         }
 
@@ -192,6 +193,11 @@ public class InternalKeyedStateTestBase {
             @Override
             public boolean isEmpty() {
                 return requests.isEmpty();
+            }
+
+            @Override
+            public int size() {
+                return requests.size();
             }
         }
     }

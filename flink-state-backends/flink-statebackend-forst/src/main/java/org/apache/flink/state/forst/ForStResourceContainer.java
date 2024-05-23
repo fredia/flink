@@ -269,10 +269,6 @@ public final class ForStResourceContainer implements AutoCloseable {
         return configuration.get(EXECUTOR_IO_PARALLELISM);
     }
 
-    public ReadableConfig getConfiguration() {
-        return configuration;
-    }
-
     /**
      * Prepare local and remote directories.
      *
