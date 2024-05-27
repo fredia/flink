@@ -24,7 +24,6 @@ import org.apache.flink.runtime.asyncprocessing.StateRequestContainer;
 import org.apache.flink.runtime.asyncprocessing.StateRequestHandler;
 import org.apache.flink.util.Preconditions;
 import org.apache.flink.util.concurrent.ExecutorThreadFactory;
-import org.apache.flink.util.concurrent.FutureUtils;
 
 import org.rocksdb.RocksDB;
 import org.rocksdb.WriteOptions;
@@ -64,9 +63,7 @@ public class ForStStateExecutor implements StateExecutor {
     private final WriteOptions writeOptions;
 
     public ForStStateExecutor(int ioParallelism, RocksDB db, WriteOptions writeOptions) {
-        this.coordinatorThread =
-                Executors.newSingleThreadScheduledExecutor(
-                        new ExecutorThreadFactory("ForSt-StateExecutor-Coordinator"));
+        this.coordinatorThread = null;
         this.workerThreads =
                 Executors.newFixedThreadPool(
                         ioParallelism, new ExecutorThreadFactory("ForSt-StateExecutor-IO"));
@@ -87,7 +84,6 @@ public class ForStStateExecutor implements StateExecutor {
                 (ForStStateRequestClassifier) stateRequestContainer;
         CompletableFuture<Integer> resultFuture = new CompletableFuture<>();
         List<CompletableFuture<Void>> futures = new ArrayList<>(3);
-        int requestSize = stateRequestClassifier.size();
 
         List<ForStDBPutRequest<?, ?>> putRequests = stateRequestClassifier.pollDbPutRequests();
         if (!putRequests.isEmpty()) {
@@ -146,8 +142,9 @@ public class ForStStateExecutor implements StateExecutor {
         // workerThreads);
         //                        futures.add(iterOperations.process());
         //                    }
-        FutureUtils.combineAll(futures)
-                .thenAcceptAsync((e) -> resultFuture.complete(requestSize), coordinatorThread);
+        //        FutureUtils.combineAll(futures)
+        //                .thenAcceptAsync((e) -> resultFuture.complete(requestSize),
+        // coordinatorThread);
         return resultFuture;
     }
 

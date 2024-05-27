@@ -272,6 +272,11 @@ public class AsyncExecutionController<K> implements StateRequestHandler {
         return stateFuture;
     }
 
+    @Override
+    public Runnable getRequestDisposer() {
+        return () -> inFlightRequest.decrementAndGet();
+    }
+
     <IN, OUT> void insertActiveBuffer(StateRequest<K, IN, OUT> request) {
         stateRequestsBuffer.enqueueToActive(request);
     }
@@ -290,6 +295,13 @@ public class AsyncExecutionController<K> implements StateRequestHandler {
             return;
         }
 
+        LOG.debug("in flight request, {} {}.", inFlightRequest.get(), inFlightRequestSnapshot);
+        // System.out.println("in flight request, " + inFlightRequest.get() + " " +
+        // inFlightRequestSnapshot);
+        if (inFlightRequest.get() > inFlightRequestSnapshot) {
+            return;
+        }
+
         Optional<StateRequestContainer> toRun =
                 stateRequestsBuffer.popActive(
                         batchSize, () -> stateExecutor.createStateRequestContainer(this));
@@ -297,15 +309,10 @@ public class AsyncExecutionController<K> implements StateRequestHandler {
             return;
         }
 
-        if (inFlightRequest.get() * 2 > inFlightRequestSnapshot) {
-            return;
-        }
-
         inFlightRequest.addAndGet(toRun.get().size());
+        // System.out.println("run " + toRun.get().size());
         inFlightRequestSnapshot = inFlightRequest.get();
-        stateExecutor
-                .executeBatchRequests(toRun.get())
-                .whenComplete((v, e) -> inFlightRequest.addAndGet(-v));
+        stateExecutor.executeBatchRequests(toRun.get());
         stateRequestsBuffer.advanceSeq();
     }
 
@@ -345,6 +352,7 @@ public class AsyncExecutionController<K> implements StateRequestHandler {
     public void drainInflightRecords(int targetNum) {
         try {
             while (inFlightRecordNum.get() > targetNum) {
+                // System.out.println("inflight record " + inFlightRecordNum.get());
                 if (!mailboxExecutor.tryYield()) {
                     triggerIfNeeded(true);
                     waitForNewMails();
