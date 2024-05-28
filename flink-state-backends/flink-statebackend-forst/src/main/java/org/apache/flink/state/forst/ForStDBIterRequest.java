@@ -103,6 +103,7 @@ public class ForStDBIterRequest<T> {
     }
 
     public byte[] getKeyPrefixBytes() throws IOException {
+        // contextKey.setUserKey(null);
         return table.serializeKey(contextKey);
     }
 

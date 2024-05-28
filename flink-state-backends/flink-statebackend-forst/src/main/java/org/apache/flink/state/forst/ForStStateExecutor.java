@@ -24,6 +24,7 @@ import org.apache.flink.runtime.asyncprocessing.StateRequestContainer;
 import org.apache.flink.runtime.asyncprocessing.StateRequestHandler;
 import org.apache.flink.util.Preconditions;
 import org.apache.flink.util.concurrent.ExecutorThreadFactory;
+import org.apache.flink.util.concurrent.FutureUtils;
 
 import org.rocksdb.RocksDB;
 import org.rocksdb.WriteOptions;
@@ -68,9 +69,9 @@ public class ForStStateExecutor implements StateExecutor {
                 Executors.newFixedThreadPool(
                         ioParallelism, new ExecutorThreadFactory("ForSt-StateExecutor-IO"));
         this.writeThreads =
-                Executors.newSingleThreadExecutor(new ExecutorThreadFactory("ForSt-Write-IO"));
+                Executors.newFixedThreadPool(1, new ExecutorThreadFactory("ForSt-Write-IO"));
         this.iterThreads =
-                Executors.newSingleThreadExecutor(new ExecutorThreadFactory("ForSt-Iter-IO"));
+                Executors.newFixedThreadPool(1, new ExecutorThreadFactory("ForSt-Iter-IO"));
 
         this.db = db;
         this.writeOptions = writeOptions;
@@ -85,13 +86,6 @@ public class ForStStateExecutor implements StateExecutor {
         CompletableFuture<Integer> resultFuture = new CompletableFuture<>();
         List<CompletableFuture<Void>> futures = new ArrayList<>(3);
 
-        List<ForStDBPutRequest<?, ?>> putRequests = stateRequestClassifier.pollDbPutRequests();
-        if (!putRequests.isEmpty()) {
-            ForStWriteBatchOperation writeOperations =
-                    new ForStWriteBatchOperation(db, putRequests, writeOptions, writeThreads);
-            futures.add(writeOperations.process());
-        }
-
         List<ForStDBGetRequest<?, ?>> getRequests = stateRequestClassifier.pollDbGetRequests();
         if (!getRequests.isEmpty()) {
             ForStGeneralMultiGetOperation getOperations =
@@ -105,6 +99,15 @@ public class ForStStateExecutor implements StateExecutor {
                     new ForStIterateOperation(db, iterRequests, iterThreads);
             futures.add(iterOperations.process());
         }
+
+        List<ForStDBPutRequest<?, ?>> putRequests = stateRequestClassifier.pollDbPutRequests();
+        if (!putRequests.isEmpty()) {
+            ForStWriteBatchOperation writeOperations =
+                    new ForStWriteBatchOperation(db, putRequests, writeOptions, writeThreads);
+            futures.add(writeOperations.process());
+        }
+
+        // LOG.debug("putRequest size {}/{}, getRequest size {}/{}, iter size {}/{}", putRequests.size(), writeThreads. ,getRequests.size(), iterRequests.size());
         //        LOG.info(
         //                "Executing a batch of state requests, putRequest size {}, getRequest size
         // {}, iter size {}",
@@ -142,9 +145,7 @@ public class ForStStateExecutor implements StateExecutor {
         // workerThreads);
         //                        futures.add(iterOperations.process());
         //                    }
-        //        FutureUtils.combineAll(futures)
-        //                .thenAcceptAsync((e) -> resultFuture.complete(requestSize),
-        // coordinatorThread);
+        FutureUtils.combineAll(futures).thenAccept((e) -> resultFuture.complete(null));
         return resultFuture;
     }
 
