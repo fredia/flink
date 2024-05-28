@@ -62,6 +62,8 @@ public class ForStMapState<K, UK, UV> extends InternalMapState<K, UK, UV>
     /** The data outputStream used for value serializer, which should be thread-safe. */
     final ThreadLocal<DataOutputSerializer> valueSerializerView;
 
+    final ThreadLocal<DataOutputSerializer> userKeySerializerView;
+
     final ThreadLocal<DataInputDeserializer> keyDeserializerView;
 
     /** The data inputStream used for value deserializer, which should be thread-safe. */
@@ -89,6 +91,7 @@ public class ForStMapState<K, UK, UV> extends InternalMapState<K, UK, UV>
         this.columnFamilyHandle = columnFamily;
         this.serializedKeyBuilder = ThreadLocal.withInitial(serializedKeyBuilderInitializer);
         this.valueSerializerView = ThreadLocal.withInitial(valueSerializerViewInitializer);
+        this.userKeySerializerView = ThreadLocal.withInitial(valueSerializerViewInitializer);
         this.keyDeserializerView = ThreadLocal.withInitial(keyDeserializerViewInitializer);
         this.valueDeserializerView = ThreadLocal.withInitial(valueDeserializerViewInitializer);
         this.userKeySerializer = stateDescriptor.getUserKeySerializer();
@@ -106,18 +109,27 @@ public class ForStMapState<K, UK, UV> extends InternalMapState<K, UK, UV>
 
     @Override
     public byte[] serializeKey(ContextKey<K> contextKey) throws IOException {
-        contextKey.resetExtra();
-        return contextKey.getOrCreateSerializedKey(
-                ctxKey -> {
-                    SerializedCompositeKeyBuilder<K> builder = serializedKeyBuilder.get();
-                    builder.setKeyAndKeyGroup(ctxKey.getRawKey(), ctxKey.getKeyGroup());
-                    builder.setNamespace(VoidNamespace.get(), VoidNamespaceSerializer.INSTANCE);
-                    if (contextKey.getUserKey() == null) {
-                        return builder.build();
-                    }
-                    UK userKey = (UK) contextKey.getUserKey();
-                    return builder.buildCompositeKeyUserKey(userKey, userKeySerializer);
-                });
+        byte[] primaryKey;
+        if (contextKey.getExtra() != null) {
+            primaryKey = (byte[]) contextKey.getExtra();
+        } else {
+            SerializedCompositeKeyBuilder<K> builder = serializedKeyBuilder.get();
+            builder.setKeyAndKeyGroup(contextKey.getRawKey(), contextKey.getKeyGroup());
+            builder.setNamespace(VoidNamespace.get(), VoidNamespaceSerializer.INSTANCE);
+            primaryKey = builder.build();
+            contextKey.setExtra(primaryKey);
+        }
+
+        if (contextKey.getUserKey() == null) {
+            return primaryKey;
+        }
+
+        DataOutputSerializer outputView = userKeySerializerView.get();
+        outputView.clear();
+        outputView.write(primaryKey, 0, primaryKey.length);
+        UK userKey = (UK) contextKey.getUserKey();
+        userKeySerializer.serialize(userKey, outputView);
+        return outputView.getCopyOfBuffer();
     }
 
     @Override

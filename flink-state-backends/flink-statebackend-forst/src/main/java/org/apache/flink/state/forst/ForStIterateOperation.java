@@ -40,7 +40,7 @@ public class ForStIterateOperation implements ForStDBOperation {
 
     private static final Logger LOG = LoggerFactory.getLogger(ForStIterateOperation.class);
 
-    public static final int CACHE_SIZE_LIMIT = 128;
+    public static final int CACHE_SIZE_LIMIT = 512;
 
     private final RocksDB db;
 

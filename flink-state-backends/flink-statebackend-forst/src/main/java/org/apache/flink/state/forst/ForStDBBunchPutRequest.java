@@ -62,7 +62,6 @@ public class ForStDBBunchPutRequest<K> extends ForStDBPutRequest<ContextKey<K>, 
 
     @Override
     public byte[] buildSerializedKey() throws IOException {
-        key.resetExtra();
         return table.serializeKey(key);
     }
 
