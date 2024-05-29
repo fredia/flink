@@ -163,9 +163,17 @@ public class ForStKeyedStateBackend<K> implements AsyncKeyedStateBackend {
     @Override
     @Nonnull
     public StateExecutor createStateExecutor() {
-        LOG.info("Creating ForSt State Executor. {}", optionsContainer.getIoParallelism());
+        LOG.info(
+                "Creating ForSt State Executor. {} {} {}",
+                optionsContainer.getReadIoParallelism(),
+                optionsContainer.getWriteIoParallelism(),
+                optionsContainer.getIterIoParallelism());
         return new ForStStateExecutor(
-                optionsContainer.getIoParallelism(), db, optionsContainer.getWriteOptions());
+                optionsContainer.getReadIoParallelism(),
+                optionsContainer.getWriteIoParallelism(),
+                optionsContainer.getIterIoParallelism(),
+                db,
+                optionsContainer.getWriteOptions());
     }
 
     /** Should only be called by one thread, and only after all accesses to the DB happened. */

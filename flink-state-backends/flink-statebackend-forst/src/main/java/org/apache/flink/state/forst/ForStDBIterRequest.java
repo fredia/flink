@@ -23,6 +23,8 @@ import org.apache.flink.core.state.InternalStateFuture;
 import org.apache.flink.runtime.asyncprocessing.StateRequestHandler;
 
 import org.rocksdb.ColumnFamilyHandle;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nonnull;
 
@@ -34,6 +36,8 @@ import java.io.IOException;
  * @param <T> The type of value in iterator returned by get request.
  */
 public class ForStDBIterRequest<T> {
+
+    private final Logger LOG = LoggerFactory.getLogger(getClass());
 
     /** The type of result returned by iterator. */
     public enum ResultType {
@@ -68,6 +72,8 @@ public class ForStDBIterRequest<T> {
 
     private Runnable disposer;
 
+    long enterTime;
+
     public ForStDBIterRequest(
             ResultType type,
             ContextKey contextKey,
@@ -84,6 +90,7 @@ public class ForStDBIterRequest<T> {
         this.keyGroupPrefixBytes = table.getKeyGroupPrefixBytes();
         this.toSeekBytes = toSeekBytes;
         this.disposer = disposer;
+        this.enterTime = System.nanoTime();
     }
 
     public int getKeyGroupPrefixBytes() {
@@ -129,6 +136,7 @@ public class ForStDBIterRequest<T> {
         if (disposer != null) {
             disposer.run();
         }
+        LOG.debug("IterRequest {},", System.nanoTime() - enterTime);
         future.complete(iterator);
     }
 }

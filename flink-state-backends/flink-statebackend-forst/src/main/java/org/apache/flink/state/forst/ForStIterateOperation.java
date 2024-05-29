@@ -40,7 +40,7 @@ public class ForStIterateOperation implements ForStDBOperation {
 
     private static final Logger LOG = LoggerFactory.getLogger(ForStIterateOperation.class);
 
-    public static final int CACHE_SIZE_LIMIT = 512;
+    public static final int CACHE_SIZE_LIMIT = 128;
 
     private final RocksDB db;
 
@@ -52,6 +52,95 @@ public class ForStIterateOperation implements ForStDBOperation {
         this.db = db;
         this.batchRequest = batchRequest;
         this.executor = executor;
+    }
+
+    public static void processSingle(ForStDBIterRequest<?> request, Executor executor, RocksDB db) {
+        executor.execute(
+                () -> {
+                    // todo: config read options
+                    try (RocksIterator iter = db.newIterator(request.getColumnFamilyHandle())) {
+                        byte[] prefix = request.getKeyPrefixBytes();
+                        int userKeyOffset = prefix.length;
+                        if (request.getToSeekBytes() != null) {
+                            iter.seek(request.getToSeekBytes());
+                        } else {
+                            iter.seek(prefix);
+                        }
+                        List<RawEntry> entries = new ArrayList<>(CACHE_SIZE_LIMIT);
+                        boolean encounterEnd = false;
+                        byte[] nextSeek = prefix;
+                        while (iter.isValid() && entries.size() < CACHE_SIZE_LIMIT) {
+                            byte[] key = iter.key();
+                            if (startWithKeyPrefix(prefix, key, request.getKeyGroupPrefixBytes())) {
+                                entries.add(new RawEntry(key, iter.value()));
+                                nextSeek = key;
+                            } else {
+                                encounterEnd = true;
+                                break;
+                            }
+                            iter.next();
+                        }
+                        if (iter.isValid()) {
+                            nextSeek = iter.key();
+                        }
+                        if (entries.size() < CACHE_SIZE_LIMIT) {
+                            encounterEnd = true;
+                        }
+                        LOG.debug(
+                                "iter entry size {} {} {}",
+                                entries.size(),
+                                encounterEnd,
+                                request.getToSeekBytes() == null);
+                        Collection<Object> deserializedEntries = new ArrayList<>(entries.size());
+                        switch (request.getResultType()) {
+                            case KEY:
+                                {
+                                    for (RawEntry en : entries) {
+                                        deserializedEntries.add(
+                                                request.deserializeUserKey(
+                                                        en.rawKeyBytes, userKeyOffset));
+                                    }
+                                    break;
+                                }
+                            case VALUE:
+                                {
+                                    for (RawEntry en : entries) {
+                                        deserializedEntries.add(
+                                                request.deserializeUserValue(en.rawValueBytes));
+                                    }
+                                    break;
+                                }
+                            case ENTRY:
+                                {
+                                    for (RawEntry en : entries) {
+                                        deserializedEntries.add(
+                                                new MapEntry(
+                                                        request.deserializeUserKey(
+                                                                en.rawKeyBytes, userKeyOffset),
+                                                        request.deserializeUserValue(
+                                                                en.rawValueBytes)));
+                                    }
+                                    break;
+                                }
+                            default:
+                                throw new IllegalStateException(
+                                        "Unknown result type: " + request.getResultType());
+                        }
+                        ForStMapIterator stateIterator =
+                                new ForStMapIterator<>(
+                                        request.getState(),
+                                        request.getResultType(),
+                                        StateRequestType.ITERATOR_LOADING,
+                                        request.getStateRequestHandler(),
+                                        deserializedEntries,
+                                        encounterEnd,
+                                        nextSeek);
+
+                        request.completeStateFuture(stateIterator);
+                    } catch (Exception e) {
+                        LOG.warn("Error when process iterate operation for forStDB", e);
+                    }
+                });
     }
 
     @Override

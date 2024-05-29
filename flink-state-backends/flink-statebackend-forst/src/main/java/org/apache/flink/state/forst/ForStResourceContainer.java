@@ -55,7 +55,9 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 
-import static org.apache.flink.state.forst.ForStOptions.EXECUTOR_IO_PARALLELISM;
+import static org.apache.flink.state.forst.ForStOptions.EXECUTOR_ITER_IO_PARALLELISM;
+import static org.apache.flink.state.forst.ForStOptions.EXECUTOR_READ_IO_PARALLELISM;
+import static org.apache.flink.state.forst.ForStOptions.EXECUTOR_WRITE_IO_PARALLELISM;
 
 /**
  * The container for ForSt resources, including option factory and shared resource among instances.
@@ -175,8 +177,8 @@ public final class ForStResourceContainer implements AutoCloseable {
             opt.setEnv(new FlinkEnv(remoteForStPath.toString()));
         }
 
-        opt.setUseDirectIoForFlushAndCompaction(true);
-        opt.setUseDirectReads(true);
+        //        opt.setUseDirectIoForFlushAndCompaction(true);
+        //        opt.setUseDirectReads(true);
 
         return opt;
     }
@@ -268,10 +270,17 @@ public final class ForStResourceContainer implements AutoCloseable {
         return remoteBasePath;
     }
 
-    public int getIoParallelism() {
-        return configuration.get(EXECUTOR_IO_PARALLELISM);
+    public int getReadIoParallelism() {
+        return configuration.get(EXECUTOR_READ_IO_PARALLELISM);
     }
 
+    public int getWriteIoParallelism() {
+        return configuration.get(EXECUTOR_WRITE_IO_PARALLELISM);
+    }
+
+    public int getIterIoParallelism() {
+        return configuration.get(EXECUTOR_ITER_IO_PARALLELISM);
+    }
     /**
      * Prepare local and remote directories.
      *

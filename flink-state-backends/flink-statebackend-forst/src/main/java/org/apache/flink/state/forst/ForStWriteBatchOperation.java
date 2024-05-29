@@ -51,6 +51,51 @@ public class ForStWriteBatchOperation implements ForStDBOperation {
         this.executor = executor;
     }
 
+    public static void processSingle(
+            ForStDBPutRequest<?, ?> request, Executor executor, RocksDB db) {
+        executor.execute(
+                () -> {
+                    try {
+                        ColumnFamilyHandle cf = request.getColumnFamilyHandle();
+                        if (request.valueIsNull()) {
+                            if (request instanceof ForStDBBunchPutRequest) {
+                                ForStDBBunchPutRequest<?> bunchPutRequest =
+                                        (ForStDBBunchPutRequest<?>) request;
+                                byte[] primaryKey = bunchPutRequest.buildSerializedKey(null);
+                                byte[] endKey = ForStDBBunchPutRequest.nextBytes(primaryKey);
+
+                                // use deleteRange delete all records under the primary key
+                                db.deleteRange(request.getColumnFamilyHandle(), primaryKey, endKey);
+                            } else {
+                                // put(key, null) == delete(key)
+                                db.delete(
+                                        request.getColumnFamilyHandle(),
+                                        request.buildSerializedKey());
+                            }
+                        } else if (!request.valueIsMap()) {
+                            byte[] key = request.buildSerializedKey();
+                            byte[] value = request.buildSerializedValue();
+                            db.put(cf, key, value);
+                        } else {
+                            ForStDBBunchPutRequest<?> bunchPutRequest =
+                                    (ForStDBBunchPutRequest<?>) request;
+
+                            for (Map.Entry<?, ?> entry :
+                                    bunchPutRequest.getBunchValue().entrySet()) {
+                                byte[] key = bunchPutRequest.buildSerializedKey(entry.getKey());
+                                byte[] value =
+                                        bunchPutRequest.buildSerializedValue(entry.getValue());
+                                db.put(cf, key, value);
+                            }
+                        }
+                    } catch (Exception e) {
+                        throw new CompletionException("Error while adding data to ForStDB", e);
+                    } finally {
+                        request.completeStateFuture();
+                    }
+                });
+    }
+
     @Override
     public CompletableFuture<Void> process() {
         CompletableFuture<Void> future = new CompletableFuture<>();

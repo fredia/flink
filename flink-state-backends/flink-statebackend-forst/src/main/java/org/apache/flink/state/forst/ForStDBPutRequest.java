@@ -21,6 +21,8 @@ package org.apache.flink.state.forst;
 import org.apache.flink.core.state.InternalStateFuture;
 
 import org.rocksdb.ColumnFamilyHandle;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nullable;
 
@@ -34,6 +36,7 @@ import java.util.Map;
  * @param <V> The type of value in put access request.
  */
 public class ForStDBPutRequest<K, V> {
+    final Logger LOG = LoggerFactory.getLogger(getClass());
 
     protected final K key;
 
@@ -47,6 +50,8 @@ public class ForStDBPutRequest<K, V> {
 
     private Runnable disposer;
 
+    long enterTime;
+
     protected ForStDBPutRequest(
             K key,
             V value,
@@ -59,6 +64,7 @@ public class ForStDBPutRequest<K, V> {
         this.future = future;
         this.tableIsMap = table instanceof ForStMapState;
         this.disposer = disposer;
+        this.enterTime = System.nanoTime();
     }
 
     public boolean valueIsNull() {
@@ -87,6 +93,7 @@ public class ForStDBPutRequest<K, V> {
             disposer.run();
         }
         future.complete(null);
+        LOG.debug("PutRequest cost {}", System.nanoTime() - enterTime);
     }
 
     /**
