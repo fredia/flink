@@ -44,4 +44,7 @@ public class MockStateExecutor implements StateExecutor {
 
     @Override
     public void shutdown() {}
+
+    @Override
+    public void dispatch(StateRequest<?, ?, ?> stateRequest) {}
 }

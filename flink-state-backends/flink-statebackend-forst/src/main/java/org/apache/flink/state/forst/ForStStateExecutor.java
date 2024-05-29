@@ -36,6 +36,8 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadPoolExecutor;
 
+import static org.apache.flink.state.forst.ForStStateRequestClassifier.convertStateRequestsToForStDBRequests;
+
 /**
  * The {@link StateExecutor} implementation which executing batch {@link StateRequest}s for
  * ForStStateBackend.
@@ -101,7 +103,7 @@ public class ForStStateExecutor implements StateExecutor {
                     ForStIterateOperation iterOperations =
                             new ForStIterateOperation(db, null, iterThreads);
                     for (StateRequest<?, ?, ?> stateRequest : stateRequests) {
-                        stateRequestClassifier.convertStateRequestsToForStDBRequests(
+                        convertStateRequestsToForStDBRequests(
                                 stateRequest,
                                 writeOperations,
                                 getOperations,
@@ -202,5 +204,27 @@ public class ForStStateExecutor implements StateExecutor {
         workerThreads.shutdown();
         // coordinatorThread.shutdown();
         LOG.info("Shutting down the ForStStateExecutor.");
+    }
+
+    @Override
+    public void dispatch(StateRequest<?, ?, ?> stateRequest) {
+        coordinatorThread.execute(
+                () -> {
+                    ForStWriteBatchOperation writeOperations =
+                            new ForStWriteBatchOperation(db, null, writeOptions, writeThreads);
+                    ForStGeneralMultiGetOperation getOperations =
+                            new ForStGeneralMultiGetOperation(db, null, workerThreads);
+                    ForStIterateOperation iterOperations =
+                            new ForStIterateOperation(db, null, iterThreads);
+                    convertStateRequestsToForStDBRequests(
+                            stateRequest,
+                            writeOperations,
+                            getOperations,
+                            iterOperations,
+                            workerThreads,
+                            workerThreads,
+                            workerThreads,
+                            db);
+                });
     }
 }

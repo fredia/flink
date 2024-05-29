@@ -182,6 +182,9 @@ public class InternalKeyedStateTestBase {
         @Override
         public void shutdown() {}
 
+        @Override
+        public void dispatch(StateRequest<?, ?, ?> stateRequest) {}
+
         static class TestStateRequestContainer implements StateRequestContainer {
             ArrayList<StateRequest<?, ?, ?>> requests = new ArrayList<>();
 

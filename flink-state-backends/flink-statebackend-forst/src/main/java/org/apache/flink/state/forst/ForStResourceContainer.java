@@ -177,8 +177,8 @@ public final class ForStResourceContainer implements AutoCloseable {
             opt.setEnv(new FlinkEnv(remoteForStPath.toString()));
         }
 
-        //        opt.setUseDirectIoForFlushAndCompaction(true);
-        //        opt.setUseDirectReads(true);
+        opt.setUseDirectIoForFlushAndCompaction(true);
+        opt.setUseDirectReads(true);
 
         return opt;
     }

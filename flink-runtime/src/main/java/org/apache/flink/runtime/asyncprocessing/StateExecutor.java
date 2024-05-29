@@ -42,4 +42,6 @@ public interface StateExecutor {
 
     /** Shutdown the StateExecutor, and new committed state execution requests will be rejected. */
     void shutdown();
+
+    void dispatch(StateRequest<?, ?, ?> stateRequest);
 }

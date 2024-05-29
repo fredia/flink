@@ -759,6 +759,9 @@ class AsyncExecutionControllerTest {
 
         @Override
         public void shutdown() {}
+
+        @Override
+        public void dispatch(StateRequest<?, ?, ?> stateRequest) {}
     }
 
     static class TestAsyncFrameworkExceptionHandler implements AsyncFrameworkExceptionHandler {

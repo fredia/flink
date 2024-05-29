@@ -76,7 +76,7 @@ public class ForStStateRequestClassifier implements StateRequestContainer {
     }
 
     @SuppressWarnings("ConstantConditions")
-    public void convertStateRequestsToForStDBRequests(
+    public static void convertStateRequestsToForStDBRequests(
             StateRequest<?, ?, ?> stateRequest,
             ForStWriteBatchOperation forStWriteBatchOperation,
             ForStGeneralMultiGetOperation forStGeneralMultiGetOperation,

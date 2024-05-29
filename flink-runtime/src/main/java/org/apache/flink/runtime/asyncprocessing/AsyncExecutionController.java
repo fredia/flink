@@ -33,7 +33,6 @@ import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nullable;
 
-import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -268,7 +267,7 @@ public class AsyncExecutionController<K> implements StateRequestHandler {
             insertBlockingBuffer(request);
         }
         // Step 4: trigger the (active) buffer if needed.
-        triggerIfNeeded(false);
+        triggerIfNeeded(true);
         return stateFuture;
     }
 
@@ -302,17 +301,12 @@ public class AsyncExecutionController<K> implements StateRequestHandler {
             return;
         }
 
-        Optional<StateRequestContainer> toRun =
-                stateRequestsBuffer.popActive(
-                        batchSize, () -> stateExecutor.createStateRequestContainer(this));
-        if (!toRun.isPresent() || toRun.get().isEmpty()) {
-            return;
+        int count = stateRequestsBuffer.activeQueueSize();
+        inFlightRequest.addAndGet(count);
+        while (!stateRequestsBuffer.activeQueue.isEmpty()) {
+            stateExecutor.dispatch(stateRequestsBuffer.activeQueue.pop());
         }
-
-        inFlightRequest.addAndGet(toRun.get().size());
-        // System.out.println("run " + toRun.get().size());
         inFlightRequestSnapshot = inFlightRequest.get();
-        stateExecutor.executeBatchRequests(toRun.get());
         stateRequestsBuffer.advanceSeq();
     }
 
