@@ -21,9 +21,6 @@ package org.apache.flink.runtime.asyncprocessing;
 import org.apache.flink.api.common.operators.MailboxExecutor;
 import org.apache.flink.util.function.ThrowingRunnable;
 
-import net.jcip.annotations.GuardedBy;
-
-import java.util.ArrayList;
 import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -39,13 +36,7 @@ public class BatchCallbackRunner {
 
     private final int batchSize;
 
-    private final ConcurrentLinkedDeque<ArrayList<ThrowingRunnable<? extends Exception>>>
-            callbackQueue;
-
-    private final Object activeBufferLock = new Object();
-
-    @GuardedBy("activeBufferLock")
-    private ArrayList<ThrowingRunnable<? extends Exception>> activeBuffer;
+    private final ConcurrentLinkedDeque<ThrowingRunnable<? extends Exception>> callbackQueue;
 
     private final AtomicInteger currentMails = new AtomicInteger(0);
 
@@ -58,48 +49,42 @@ public class BatchCallbackRunner {
         this.newMailNotify = newMailNotify;
         this.batchSize = DEFAULT_BATCH_SIZE;
         this.callbackQueue = new ConcurrentLinkedDeque<>();
-        this.activeBuffer = new ArrayList<>();
     }
 
     public void submit(ThrowingRunnable<? extends Exception> task) {
-        synchronized (activeBufferLock) {
-            activeBuffer.add(task);
-            if (activeBuffer.size() >= batchSize) {
-                callbackQueue.offerLast(activeBuffer);
-                activeBuffer = new ArrayList<>(batchSize);
-            }
-        }
-        currentMails.incrementAndGet();
+        callbackQueue.offerLast(task);
+        currentMails.getAndIncrement();
         insertMail(false);
     }
 
     public void insertMail(boolean force) {
         if (force || !hasMail) {
-            if (currentMails.get() > 0) {
-                hasMail = true;
-                mailboxExecutor.execute(this::runBatch, "Batch running callback of state requests");
-                notifyNewMail();
-            } else {
-                hasMail = false;
+            synchronized (this) {
+                if (force || !hasMail) {
+                    if (currentMails.get() > 0) {
+                        hasMail = true;
+                        mailboxExecutor.execute(
+                                this::runBatch, "Batch running callback of state requests");
+                        notifyNewMail();
+                    } else {
+                        hasMail = false;
+                    }
+                }
             }
         }
     }
 
     public void runBatch() throws Exception {
-        ArrayList<ThrowingRunnable<? extends Exception>> batch = callbackQueue.poll();
-        if (batch == null) {
-            synchronized (activeBufferLock) {
-                if (!activeBuffer.isEmpty()) {
-                    batch = activeBuffer;
-                    activeBuffer = new ArrayList<>(batchSize);
-                }
-            }
-        }
-        if (batch != null) {
-            for (ThrowingRunnable<? extends Exception> task : batch) {
+        int count = 0;
+        while (count < batchSize && currentMails.get() > 0) {
+            ThrowingRunnable<? extends Exception> task = callbackQueue.pollFirst();
+            if (task != null) {
                 task.run();
+                currentMails.decrementAndGet();
+                count++;
+            } else {
+                break;
             }
-            currentMails.addAndGet(-batch.size());
         }
         insertMail(true);
     }

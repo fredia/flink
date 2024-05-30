@@ -23,6 +23,7 @@ import org.rocksdb.RocksIterator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
@@ -44,11 +45,22 @@ public class ForStGeneralMultiGetOperation implements ForStDBOperation {
 
     private final Executor executor;
 
+    private final int poolSize;
+
     ForStGeneralMultiGetOperation(
             RocksDB db, List<ForStDBGetRequest<?, ?>> batchRequest, Executor executor) {
+        this(db, batchRequest, executor, 1);
+    }
+
+    ForStGeneralMultiGetOperation(
+            RocksDB db,
+            List<ForStDBGetRequest<?, ?>> batchRequest,
+            Executor executor,
+            int poolSize) {
         this.db = db;
         this.batchRequest = batchRequest;
         this.executor = executor;
+        this.poolSize = poolSize;
     }
 
     @Override
@@ -57,42 +69,49 @@ public class ForStGeneralMultiGetOperation implements ForStDBOperation {
         CompletableFuture<Void> future = new CompletableFuture<>();
 
         AtomicInteger counter = new AtomicInteger(batchRequest.size());
-        for (int i = 0; i < batchRequest.size(); i++) {
-            ForStDBGetRequest<?, ?> request = batchRequest.get(i);
+        int step = Math.max(1, Math.min(5, batchRequest.size() / poolSize));
+        for (int i = 0; i < batchRequest.size(); ) {
+            ArrayList<ForStDBGetRequest<?, ?>> requests = new ArrayList<>(step);
+            for (int j = 0; j < step && i < batchRequest.size(); j++, i++) {
+                requests.add(batchRequest.get(i));
+            }
             executor.execute(
                     () -> {
-                        long startTime = System.nanoTime();
-                        RocksIterator iter = null;
-                        try {
-                            byte[] key = request.buildSerializedKey();
-                            if (request.checkMapEmpty()) {
-                                iter = db.newIterator(request.getColumnFamilyHandle());
-                                iter.seek(key);
-                                if (iter.isValid()
-                                        && startWithKeyPrefix(
-                                                key,
-                                                iter.key(),
-                                                request.getKeyGroupPrefixBytes())) {
-                                    request.completeStateFuture(new byte[0]);
+                        for (ForStDBGetRequest<?, ?> request : requests) {
+                            long startTime = System.nanoTime();
+                            RocksIterator iter = null;
+                            try {
+                                byte[] key = request.buildSerializedKey();
+                                if (request.checkMapEmpty()) {
+                                    iter = db.newIterator(request.getColumnFamilyHandle());
+                                    iter.seek(key);
+                                    if (iter.isValid()
+                                            && startWithKeyPrefix(
+                                                    key,
+                                                    iter.key(),
+                                                    request.getKeyGroupPrefixBytes())) {
+                                        request.completeStateFuture(new byte[0]);
+                                    } else {
+                                        request.completeStateFuture(null);
+                                    }
                                 } else {
-                                    request.completeStateFuture(null);
+                                    byte[] value = db.get(request.getColumnFamilyHandle(), key);
+                                    request.completeStateFuture(value);
                                 }
-                            } else {
-                                byte[] value = db.get(request.getColumnFamilyHandle(), key);
-                                request.completeStateFuture(value);
-                            }
-                        } catch (Exception e) {
-                            LOG.warn(
-                                    "Error when process general multiGet operation for forStDB", e);
-                            future.completeExceptionally(e);
-                        } finally {
-                            request.addTime(System.nanoTime() - startTime);
-                            if (iter != null) {
-                                iter.close();
-                            }
-                            if (counter.decrementAndGet() == 0
-                                    && !future.isCompletedExceptionally()) {
-                                future.complete(null);
+                            } catch (Exception e) {
+                                LOG.warn(
+                                        "Error when process general multiGet operation for forStDB",
+                                        e);
+                                future.completeExceptionally(e);
+                            } finally {
+                                request.addTime(System.nanoTime() - startTime);
+                                if (iter != null) {
+                                    iter.close();
+                                }
+                                if (counter.decrementAndGet() == 0
+                                        && !future.isCompletedExceptionally()) {
+                                    future.complete(null);
+                                }
                             }
                         }
                     });
