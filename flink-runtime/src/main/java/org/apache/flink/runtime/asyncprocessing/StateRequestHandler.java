@@ -40,5 +40,11 @@ public interface StateRequestHandler {
     <IN, OUT> InternalStateFuture<OUT> handleRequest(
             @Nullable State state, StateRequestType type, @Nullable IN payload);
 
-    Runnable getRequestDisposer();
+    DisposerCounter getRequestDisposer();
+
+    interface DisposerCounter {
+        void run();
+
+        void addTime(long timeInNano);
+    }
 }

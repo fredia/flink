@@ -143,7 +143,7 @@ class ForStDBIterateOperationTest extends ForStDBOperationTestBase {
                         stateRequestHandler,
                         future,
                         null,
-                        () -> {});
+                        null);
         batchIterRequest.add(request1);
 
         ExecutorService executor = Executors.newFixedThreadPool(2);
@@ -213,7 +213,7 @@ class ForStDBIterateOperationTest extends ForStDBOperationTestBase {
         }
 
         @Override
-        public Runnable getRequestDisposer() {
+        public DisposerCounter getRequestDisposer() {
             return null;
         }
     }

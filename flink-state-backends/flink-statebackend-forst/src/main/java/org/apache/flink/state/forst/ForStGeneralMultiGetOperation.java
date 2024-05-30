@@ -61,6 +61,7 @@ public class ForStGeneralMultiGetOperation implements ForStDBOperation {
             ForStDBGetRequest<?, ?> request = batchRequest.get(i);
             executor.execute(
                     () -> {
+                        long startTime = System.nanoTime();
                         RocksIterator iter = null;
                         try {
                             byte[] key = request.buildSerializedKey();
@@ -85,6 +86,7 @@ public class ForStGeneralMultiGetOperation implements ForStDBOperation {
                                     "Error when process general multiGet operation for forStDB", e);
                             future.completeExceptionally(e);
                         } finally {
+                            request.addTime(System.nanoTime() - startTime);
                             if (iter != null) {
                                 iter.close();
                             }

@@ -89,7 +89,7 @@ public class ForStDBOperationTestBase {
             }
 
             @Override
-            public Runnable getRequestDisposer() {
+            public DisposerCounter getRequestDisposer() {
                 return null;
             }
         };

@@ -19,6 +19,7 @@
 package org.apache.flink.state.forst;
 
 import org.apache.flink.core.state.InternalStateFuture;
+import org.apache.flink.runtime.asyncprocessing.StateRequestHandler.DisposerCounter;
 
 import org.rocksdb.ColumnFamilyHandle;
 
@@ -45,14 +46,14 @@ public class ForStDBPutRequest<K, V> {
 
     protected final boolean tableIsMap;
 
-    private Runnable disposer;
+    private DisposerCounter disposer;
 
     protected ForStDBPutRequest(
             K key,
             V value,
             ForStInnerTable<K, V> table,
             InternalStateFuture<Void> future,
-            Runnable disposer) {
+            DisposerCounter disposer) {
         this.key = key;
         this.value = value;
         this.table = table;
@@ -89,6 +90,12 @@ public class ForStDBPutRequest<K, V> {
         future.complete(null);
     }
 
+    public void countTime(long t) {
+        if (disposer != null) {
+            disposer.addTime(t);
+        }
+    }
+
     /**
      * If the value of the ForStDBPutRequest is null, then the request will signify the deletion of
      * the data associated with that key.
@@ -98,7 +105,7 @@ public class ForStDBPutRequest<K, V> {
             @Nullable V value,
             ForStInnerTable<K, V> table,
             InternalStateFuture<Void> future,
-            Runnable disposer) {
+            DisposerCounter disposer) {
         return new ForStDBPutRequest<>(key, value, table, future, disposer);
     }
 }

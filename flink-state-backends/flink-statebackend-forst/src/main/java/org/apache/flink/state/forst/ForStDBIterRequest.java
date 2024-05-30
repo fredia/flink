@@ -21,6 +21,7 @@ import org.apache.flink.api.common.state.v2.State;
 import org.apache.flink.api.common.state.v2.StateIterator;
 import org.apache.flink.core.state.InternalStateFuture;
 import org.apache.flink.runtime.asyncprocessing.StateRequestHandler;
+import org.apache.flink.runtime.asyncprocessing.StateRequestHandler.DisposerCounter;
 
 import org.rocksdb.ColumnFamilyHandle;
 
@@ -66,7 +67,7 @@ public class ForStDBIterRequest<T> {
     /** The bytes to seek to. If null, seek start from the {@link #getKeyPrefixBytes}. */
     private final byte[] toSeekBytes;
 
-    private Runnable disposer;
+    private DisposerCounter disposer;
 
     public ForStDBIterRequest(
             ResultType type,
@@ -75,7 +76,7 @@ public class ForStDBIterRequest<T> {
             StateRequestHandler stateRequestHandler,
             InternalStateFuture<StateIterator<T>> future,
             byte[] toSeekBytes,
-            Runnable disposer) {
+            DisposerCounter disposer) {
         this.resultType = type;
         this.contextKey = contextKey;
         this.table = table;
@@ -130,5 +131,11 @@ public class ForStDBIterRequest<T> {
             disposer.run();
         }
         future.complete(iterator);
+    }
+
+    public void addTime(long t) {
+        if (disposer != null) {
+            disposer.addTime(t);
+        }
     }
 }

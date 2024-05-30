@@ -54,6 +54,7 @@ public class ForStWriteBatchOperation implements ForStDBOperation {
     public CompletableFuture<Void> process() {
         return CompletableFuture.runAsync(
                 () -> {
+                    long startTime = System.nanoTime();
                     try (ForStDBWriteBatchWrapper writeBatch =
                             new ForStDBWriteBatchWrapper(db, writeOptions, batchRequest.size())) {
                         for (ForStDBPutRequest<?, ?> request : batchRequest) {
@@ -94,6 +95,11 @@ public class ForStWriteBatchOperation implements ForStDBOperation {
                         writeBatch.flush();
                         for (ForStDBPutRequest<?, ?> request : batchRequest) {
                             request.completeStateFuture();
+                        }
+
+                        for (ForStDBPutRequest<?, ?> request : batchRequest) {
+                            request.countTime(System.nanoTime() - startTime);
+                            break;
                         }
                     } catch (Exception e) {
                         throw new CompletionException("Error while adding data to ForStDB", e);

@@ -63,6 +63,7 @@ public class ForStIterateOperation implements ForStDBOperation {
             ForStDBIterRequest<?> request = batchRequest.get(i);
             executor.execute(
                     () -> {
+                        long startTime = System.nanoTime();
                         // todo: config read options
                         try (RocksIterator iter = db.newIterator(request.getColumnFamilyHandle())) {
                             byte[] prefix = request.getKeyPrefixBytes();
@@ -140,6 +141,7 @@ public class ForStIterateOperation implements ForStDBOperation {
                                             nextSeek);
 
                             request.completeStateFuture(stateIterator);
+                            request.addTime(System.nanoTime() - startTime);
                         } catch (Exception e) {
                             LOG.warn("Error when process iterate operation for forStDB", e);
                             future.completeExceptionally(e);

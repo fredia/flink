@@ -22,6 +22,7 @@ import org.apache.flink.api.common.typeutils.TypeSerializer;
 import org.apache.flink.core.memory.DataInputDeserializer;
 import org.apache.flink.core.memory.DataOutputSerializer;
 import org.apache.flink.core.state.InternalStateFuture;
+import org.apache.flink.runtime.asyncprocessing.StateRequestHandler.DisposerCounter;
 import org.apache.flink.util.Preconditions;
 
 import java.io.IOException;
@@ -48,7 +49,7 @@ public class ForStDBBunchPutRequest<K> extends ForStDBPutRequest<ContextKey<K>, 
             Map value,
             ForStMapState table,
             InternalStateFuture<Void> future,
-            Runnable disposer) {
+            DisposerCounter disposer) {
         super(key, value, table, future, disposer);
         Preconditions.checkArgument(table instanceof ForStMapState);
         this.userValueSerializer = table.userValueSerializer;

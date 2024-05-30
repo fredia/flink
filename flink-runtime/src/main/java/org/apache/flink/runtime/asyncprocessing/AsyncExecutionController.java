@@ -35,6 +35,7 @@ import javax.annotation.Nullable;
 
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * The Async Execution Controller (AEC) receives processing requests from operators, and put them
@@ -125,6 +126,8 @@ public class AsyncExecutionController<K> implements StateRequestHandler {
 
     private int inFlightRequestSnapshot = 0;
 
+    AtomicLong totalIODuration = new AtomicLong(0);
+
     public AsyncExecutionController(
             MailboxExecutor mailboxExecutor,
             AsyncFrameworkExceptionHandler exceptionHandler,
@@ -163,6 +166,7 @@ public class AsyncExecutionController<K> implements StateRequestHandler {
             metricGroup.gauge("AEC-inFlightRecordNum", inFlightRecordNum::get);
             metricGroup.gauge("AEC-activeBuffer", () -> stateRequestsBuffer.activeQueueSize());
             metricGroup.gauge("AEC-blockingBuffer", () -> stateRequestsBuffer.blockingQueueSize());
+            metricGroup.gauge("AEC-totalIO", totalIODuration::get);
         }
 
         LOG.info(
@@ -273,8 +277,18 @@ public class AsyncExecutionController<K> implements StateRequestHandler {
     }
 
     @Override
-    public Runnable getRequestDisposer() {
-        return () -> inFlightRequest.decrementAndGet();
+    public DisposerCounter getRequestDisposer() {
+        return new DisposerCounter() {
+            @Override
+            public void run() {
+                inFlightRequest.decrementAndGet();
+            }
+
+            @Override
+            public void addTime(long timeInNano) {
+                totalIODuration.addAndGet(timeInNano);
+            }
+        };
     }
 
     <IN, OUT> void insertActiveBuffer(StateRequest<K, IN, OUT> request) {

@@ -19,6 +19,7 @@
 package org.apache.flink.state.forst;
 
 import org.apache.flink.core.state.InternalStateFuture;
+import org.apache.flink.runtime.asyncprocessing.StateRequestHandler.DisposerCounter;
 
 import org.rocksdb.ColumnFamilyHandle;
 
@@ -41,7 +42,7 @@ public class ForStDBGetRequest<K, V> {
 
     private int keyGroupPrefixBytes = 1;
 
-    private final Runnable disposer;
+    private final DisposerCounter disposer;
 
     private ForStDBGetRequest(
             K key,
@@ -49,7 +50,7 @@ public class ForStDBGetRequest<K, V> {
             InternalStateFuture future,
             boolean toBoolean,
             boolean checkMapEmpty,
-            Runnable disposer) {
+            DisposerCounter disposer) {
         this.key = key;
         this.table = table;
         this.future = future;
@@ -98,8 +99,17 @@ public class ForStDBGetRequest<K, V> {
         ((InternalStateFuture<V>) future).complete(value);
     }
 
+    public void addTime(long t) {
+        if (disposer != null) {
+            disposer.addTime(t);
+        }
+    }
+
     static <K, V> ForStDBGetRequest<K, V> of(
-            K key, ForStInnerTable<K, V> table, InternalStateFuture<V> future, Runnable disposer) {
+            K key,
+            ForStInnerTable<K, V> table,
+            InternalStateFuture<V> future,
+            DisposerCounter disposer) {
         return new ForStDBGetRequest<>(key, table, future, false, false, disposer);
     }
 
@@ -110,7 +120,7 @@ public class ForStDBGetRequest<K, V> {
             InternalStateFuture future,
             boolean toBoolean,
             boolean checkMapEmpty,
-            Runnable disposer) {
+            DisposerCounter disposer) {
         return new ForStDBGetRequest<>(key, table, future, toBoolean, checkMapEmpty, disposer);
     }
 }
