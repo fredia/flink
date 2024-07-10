@@ -435,6 +435,45 @@ public class ResumeCheckpointManuallyITCase extends TestLogger {
                         });
     }
 
+    static String runJobAndRestartTM(
+            StateBackend backend,
+            @Nullable String externalCheckpoint,
+            MiniClusterWithClientResource cluster,
+            RestoreMode restoreMode,
+            Configuration jobConfig)
+            throws Exception {
+        JobGraph initialJobGraph = getJobGraph(backend, externalCheckpoint, restoreMode, jobConfig);
+        NotifyingInfiniteTupleSource.countDownLatch = new CountDownLatch(PARALLELISM);
+        cluster.getClusterClient().submitJob(initialJobGraph).get();
+
+        // wait until all sources have been started
+        NotifyingInfiniteTupleSource.countDownLatch.await();
+
+        // get 1 checkpoint for FO restoring
+        waitForCheckpoint(
+                initialJobGraph.getJobID(), cluster.getMiniCluster(), 1);
+
+        // kill TM 0
+        cluster.getMiniCluster().terminateTaskManager(0).get();
+        Thread.sleep(1000);
+        // restart a new TM to simulate Fail Over restoring
+        cluster.getMiniCluster().startTaskManager();
+
+        waitForCheckpoint(
+                initialJobGraph.getJobID(), cluster.getMiniCluster(), 2);
+
+        // cancel job
+        cluster.getClusterClient().cancel(initialJobGraph.getJobID()).get();
+        waitUntilJobCanceled(initialJobGraph.getJobID(), cluster.getClusterClient());
+
+        return getLatestCompletedCheckpointPath(
+                initialJobGraph.getJobID(), cluster.getMiniCluster())
+                .<IllegalStateException>orElseThrow(
+                        () -> {
+                            throw new IllegalStateException("Checkpoint not generated");
+                        });
+    }
+
     private static JobGraph getJobGraph(
             StateBackend backend,
             @Nullable String externalCheckpoint,
@@ -449,7 +488,7 @@ public class ResumeCheckpointManuallyITCase extends TestLogger {
         env.getCheckpointConfig()
                 .setExternalizedCheckpointRetention(
                         ExternalizedCheckpointRetention.RETAIN_ON_CANCELLATION);
-        env.setRestartStrategy(RestartStrategies.noRestart());
+        env.setRestartStrategy(RestartStrategies.fixedDelayRestart(10, 1000)); // restart
 
         env.addSource(new NotifyingInfiniteTupleSource(10_000))
                 .assignTimestampsAndWatermarks(IngestionTimeWatermarkStrategy.create())

@@ -33,6 +33,7 @@ import org.apache.flink.test.util.MiniClusterWithClientResource;
 import org.apache.flink.test.util.TestUtils;
 import org.apache.flink.util.TestLogger;
 
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -45,6 +46,7 @@ import java.util.Collection;
 import java.util.List;
 
 import static org.apache.flink.test.checkpointing.ResumeCheckpointManuallyITCase.runJobAndGetExternalizedCheckpoint;
+import static org.apache.flink.test.checkpointing.ResumeCheckpointManuallyITCase.runJobAndRestartTM;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
@@ -79,6 +81,38 @@ public class SnapshotFileMergingCompatibilityITCase extends TestLogger {
             throws Exception {
         testSwitchingFileMerging(
                 checkpointDir, true, false, restoreMode, fileMergingAcrossBoundary);
+    }
+
+    @Test
+    public void testFailOverAndDeleteOnCancel(@TempDir Path checkpointDir) throws Exception {
+        final Configuration config = new Configuration();
+        config.set(CheckpointingOptions.CHECKPOINTS_DIRECTORY, checkpointDir.toUri().toString());
+        config.set(CheckpointingOptions.INCREMENTAL_CHECKPOINTS, true);
+        config.set(CheckpointingOptions.FILE_MERGING_ACROSS_BOUNDARY, false);
+        config.set(CheckpointingOptions.FILE_MERGING_ENABLED, true);
+        MiniClusterWithClientResource firstCluster =
+                new MiniClusterWithClientResource(
+                        new MiniClusterResourceConfiguration.Builder()
+                                .setConfiguration(config)
+                                .setNumberTaskManagers(1) // make all task in one TM
+                                .setNumberSlotsPerTaskManager(4)
+                                .build());
+        EmbeddedRocksDBStateBackend stateBackend1 = new EmbeddedRocksDBStateBackend();
+        stateBackend1.configure(config, Thread.currentThread().getContextClassLoader());
+        firstCluster.before();
+        String firstCheckpoint;
+        try {
+            firstCheckpoint =
+                    runJobAndRestartTM(
+                            stateBackend1,
+                            null,
+                            firstCluster,
+                            RestoreMode.CLAIM,
+                            config);
+            assertThat(firstCheckpoint).isNotNull();
+        } finally {
+            firstCluster.after();
+        }
     }
 
     private void testSwitchingFileMerging(
