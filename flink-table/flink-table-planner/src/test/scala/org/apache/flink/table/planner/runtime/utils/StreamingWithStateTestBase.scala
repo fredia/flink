@@ -24,13 +24,14 @@ import org.apache.flink.configuration.{CheckpointingOptions, Configuration}
 import org.apache.flink.contrib.streaming.state.RocksDBStateBackend
 import org.apache.flink.core.execution.CheckpointingMode
 import org.apache.flink.runtime.state.memory.MemoryStateBackend
+import org.apache.flink.state.forst.ForStStateBackend
 import org.apache.flink.streaming.api.functions.source.FromElementsFunction
 import org.apache.flink.streaming.api.scala.DataStream
 import org.apache.flink.table.api.bridge.scala.StreamTableEnvironment
 import org.apache.flink.table.data.{RowData, StringData}
 import org.apache.flink.table.data.binary.BinaryRowData
 import org.apache.flink.table.data.writer.BinaryRowWriter
-import org.apache.flink.table.planner.runtime.utils.StreamingWithStateTestBase.{HEAP_BACKEND, ROCKSDB_BACKEND, StateBackendMode}
+import org.apache.flink.table.planner.runtime.utils.StreamingWithStateTestBase.{FORSTDB_BACKEND, HEAP_BACKEND, ROCKSDB_BACKEND, StateBackendMode}
 import org.apache.flink.table.planner.utils.TableTestUtil
 import org.apache.flink.table.runtime.types.TypeInfoLogicalTypeConverter
 import org.apache.flink.table.runtime.typeutils.InternalTypeInfo
@@ -52,6 +53,7 @@ class StreamingWithStateTestBase(state: StateBackendMode) extends StreamingTestB
   enableObjectReuse = state match {
     case HEAP_BACKEND => false // TODO heap statebackend not support obj reuse now.
     case ROCKSDB_BACKEND => true
+    case FORSTDB_BACKEND => true
   }
 
   private val classLoader = Thread.currentThread.getContextClassLoader
@@ -73,6 +75,9 @@ class StreamingWithStateTestBase(state: StateBackendMode) extends StreamingTestB
         conf.set(CheckpointingOptions.INCREMENTAL_CHECKPOINTS, Boolean.box(true))
         env.setStateBackend(
           new RocksDBStateBackend("file://" + baseCheckpointPath).configure(conf, classLoader))
+      case FORSTDB_BACKEND =>
+        val conf = new Configuration()
+        env.setStateBackend(new ForStStateBackend().configure(conf, classLoader))
     }
     this.tEnv = StreamTableEnvironment.create(env, TableTestUtil.STREAM_SETTING)
     FailingCollectionSource.failedBefore = true
@@ -235,6 +240,7 @@ object StreamingWithStateTestBase {
 
   val HEAP_BACKEND = StateBackendMode("HEAP")
   val ROCKSDB_BACKEND = StateBackendMode("ROCKSDB")
+  val FORSTDB_BACKEND = StateBackendMode("FORSTDB")
 
   @Parameters(name = "StateBackend={0}")
   def parameters(): util.Collection[Array[java.lang.Object]] = {
