@@ -205,9 +205,12 @@ public class ForStKeyedStateBackend<K> implements AsyncKeyedStateBackend {
                 throw new FlinkRuntimeException(
                         "Attempt to create StateExecutor after ForStKeyedStateBackend is disposed.");
             }
-            // TODO: Make io parallelism configurable
             StateExecutor stateExecutor =
-                    new ForStStateExecutor(4, db, optionsContainer.getWriteOptions());
+                    new ForStStateExecutor(
+                            optionsContainer.getReadIoParallelism(),
+                            optionsContainer.getWriteIoParallelism(),
+                            db,
+                            optionsContainer.getWriteOptions());
             managedStateExecutors.add(stateExecutor);
             return stateExecutor;
         }
