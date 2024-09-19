@@ -114,7 +114,7 @@ public abstract class AbstractAsyncStateStreamOperator<OUT> extends AbstractStre
 
     @Override
     public ElementOrder getElementOrder() {
-        return ElementOrder.RECORD_ORDER;
+        return ElementOrder.FIRST_STATE_ORDER;
     }
 
     @Override

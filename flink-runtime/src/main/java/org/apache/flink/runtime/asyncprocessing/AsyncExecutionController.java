@@ -344,7 +344,7 @@ public class AsyncExecutionController<K> implements StateRequestHandler {
             while (inFlightRecordNum.get() > targetNum) {
                 if (!mailboxExecutor.tryYield()) {
                     triggerIfNeeded(true);
-                    Thread.sleep(1);
+                    Thread.sleep(0);
                 }
             }
         } catch (InterruptedException ignored) {
