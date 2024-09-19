@@ -18,8 +18,10 @@
 
 package org.apache.flink.state.forst;
 
+import org.rocksdb.ReadOptions;
 import org.rocksdb.RocksDB;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
@@ -52,28 +54,34 @@ public class ForStIterateOperation implements ForStDBOperation {
 
         AtomicReference<Exception> error = new AtomicReference<>();
         AtomicInteger counter = new AtomicInteger(batchRequest.size());
-        for (int i = 0; i < batchRequest.size(); i++) {
-            ForStDBIterRequest<?, ?, ?, ?, ?> request = batchRequest.get(i);
+        int step = Math.max(1, Math.min(10, batchRequest.size() / 3));
+        for (int i = 0; i < batchRequest.size(); ) {
+            ArrayList<ForStDBIterRequest<?, ?, ?, ?, ?>> requests = new ArrayList<>(step);
+            for (int j = 0; j < step && i < batchRequest.size(); j++, i++) {
+                requests.add(batchRequest.get(i));
+            }
             executor.execute(
                     () -> {
                         // todo: config read options
-                        try {
-                            if (error.get() == null) {
-                                request.process(db, CACHE_SIZE_LIMIT);
-                            } else {
+                        for (ForStDBIterRequest<?, ?, ?, ?, ?> request : requests) {
+                            try {
+                                if (error.get() == null) {
+                                    request.process(db, CACHE_SIZE_LIMIT);
+                                } else {
+                                    request.completeStateFutureExceptionally(
+                                            "Error when execute ForStDb iterate operation",
+                                            error.get());
+                                }
+                            } catch (Exception e) {
+                                error.set(e);
                                 request.completeStateFutureExceptionally(
-                                        "Error when execute ForStDb iterate operation",
-                                        error.get());
-                            }
-                        } catch (Exception e) {
-                            error.set(e);
-                            request.completeStateFutureExceptionally(
-                                    "Error when execute ForStDb iterate operation", e);
-                            future.completeExceptionally(e);
-                        } finally {
-                            if (counter.decrementAndGet() == 0
-                                    && !future.isCompletedExceptionally()) {
-                                future.complete(null);
+                                        "Error when execute ForStDb iterate operation", e);
+                                future.completeExceptionally(e);
+                            } finally {
+                                if (counter.decrementAndGet() == 0
+                                        && !future.isCompletedExceptionally()) {
+                                    future.complete(null);
+                                }
                             }
                         }
                     });

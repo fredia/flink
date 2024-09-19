@@ -18,13 +18,14 @@
 
 package org.apache.flink.state.forst;
 
+import org.rocksdb.ColumnFamilyHandle;
+import org.rocksdb.ReadOptions;
 import org.rocksdb.RocksDB;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * The general-purpose multiGet operation implementation for ForStDB, which simulates multiGet by
@@ -49,36 +50,64 @@ public class ForStGeneralMultiGetOperation implements ForStDBOperation {
     public CompletableFuture<Void> process() {
         // TODO: Use MultiGet to optimize this implement
 
-        CompletableFuture<Void> future = new CompletableFuture<>();
-
-        AtomicReference<Exception> error = new AtomicReference<>();
-        AtomicInteger counter = new AtomicInteger(batchRequest.size());
-        for (int i = 0; i < batchRequest.size(); i++) {
-            ForStDBGetRequest<?, ?, ?, ?> request = batchRequest.get(i);
-            executor.execute(
-                    () -> {
-                        try {
-                            if (error.get() == null) {
-                                request.process(db);
-                            } else {
-                                request.completeStateFutureExceptionally(
-                                        "Error already occurred in other state request of the same "
-                                                + "group, failed the state request directly",
-                                        error.get());
-                            }
-                        } catch (Exception e) {
-                            error.set(e);
-                            request.completeStateFutureExceptionally(
-                                    "Error when execute ForStDb get operation", e);
-                            future.completeExceptionally(e);
-                        } finally {
-                            if (counter.decrementAndGet() == 0
-                                    && !future.isCompletedExceptionally()) {
-                                future.complete(null);
-                            }
+        return CompletableFuture.runAsync(
+                () -> {
+                    ReadOptions readOptions = new ReadOptions();
+                    readOptions.setReadaheadSize(0);
+                    List<byte[]> keys = new ArrayList<>(batchRequest.size());
+                    List<ColumnFamilyHandle> columnFamilyHandles =
+                            new ArrayList<>(batchRequest.size());
+                    try {
+                        for (int i = 0; i < batchRequest.size(); i++) {
+                            ForStDBGetRequest<?, ?, ?, ?> request = batchRequest.get(i);
+                            byte[] key = request.buildSerializedKey();
+                            keys.add(key);
+                            columnFamilyHandles.add(request.getColumnFamilyHandle());
                         }
-                    });
-        }
-        return future;
+                        List<byte[]> values =
+                                db.multiGetAsList(readOptions, columnFamilyHandles, keys);
+                        for (int i = 0; i < batchRequest.size(); i++) {
+                            ForStDBGetRequest<?, ?, ?, ?> request = batchRequest.get(i);
+                            request.completeStateFuture(values.get(i));
+                        }
+                    } catch (Exception e) {
+                        throw new RuntimeException(e);
+                    }
+                },
+                executor);
+
+        //        CompletableFuture<Void> future = new CompletableFuture<>();
+        //
+        //        AtomicReference<Exception> error = new AtomicReference<>();
+        //        AtomicInteger counter = new AtomicInteger(batchRequest.size());
+        //        for (int i = 0; i < batchRequest.size(); i++) {
+        //            ForStDBGetRequest<?, ?, ?, ?> request = batchRequest.get(i);
+        //            executor.execute(
+        //                    () -> {
+        //                        try {
+        //                            if (error.get() == null) {
+        //                                request.process(db);
+        //                            } else {
+        //                                request.completeStateFutureExceptionally(
+        //                                        "Error already occurred in other state request of
+        // the same "
+        //                                                + "group, failed the state request
+        // directly",
+        //                                        error.get());
+        //                            }
+        //                        } catch (Exception e) {
+        //                            error.set(e);
+        //                            request.completeStateFutureExceptionally(
+        //                                    "Error when execute ForStDb get operation", e);
+        //                            future.completeExceptionally(e);
+        //                        } finally {
+        //                            if (counter.decrementAndGet() == 0
+        //                                    && !future.isCompletedExceptionally()) {
+        //                                future.complete(null);
+        //                            }
+        //                        }
+        //                    });
+        //        }
+        //        return future;
     }
 }

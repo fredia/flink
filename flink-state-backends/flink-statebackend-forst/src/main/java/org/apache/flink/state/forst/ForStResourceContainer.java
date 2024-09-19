@@ -171,7 +171,7 @@ public final class ForStResourceContainer implements AutoCloseable {
         if (remoteForStPath != null) {
             opt.setEnv(new FlinkEnv(remoteForStPath.toString()));
         }
-
+        opt.setStatsDumpPeriodSec(60);
         return opt;
     }
 

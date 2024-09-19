@@ -183,8 +183,7 @@ public class ForStMapState<K, N, UK, UV> extends InternalMapState<K, N, UK, UV>
                 new ContextKey<>(
                         (RecordContext<K>) stateRequest.getRecordContext(),
                         ((Tuple2<UK, UV>) stateRequest.getPayload()).f0);
-        Preconditions.checkNotNull(
-                stateRequest.getPayload(), String.format("payload is null, %s", stateRequest));
+        Preconditions.checkNotNull(stateRequest.getPayload());
         UV value = null;
         if (stateRequest.getRequestType() == StateRequestType.MAP_PUT) {
             value = ((Tuple2<UK, UV>) stateRequest.getPayload()).f1;
