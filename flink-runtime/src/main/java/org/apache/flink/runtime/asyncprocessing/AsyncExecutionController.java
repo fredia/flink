@@ -61,6 +61,8 @@ public class AsyncExecutionController<K> implements StateRequestHandler {
      */
     private final int batchSize;
 
+    private final BatchCallbackRunner callbackRunner;
+
     /**
      * The timeout of {@link StateRequestBuffer#activeQueue} triggering in milliseconds. If the
      * activeQueue has not reached the {@link #batchSize} within 'buffer-timeout' milliseconds, a
@@ -117,6 +119,10 @@ public class AsyncExecutionController<K> implements StateRequestHandler {
      */
     final ParallelMode epochParallelMode = ParallelMode.SERIAL_BETWEEN_EPOCH;
 
+    private final Object notifyLock = new Object();
+
+    private volatile boolean waitingMail = false;
+
     public AsyncExecutionController(
             MailboxExecutor mailboxExecutor,
             AsyncFrameworkExceptionHandler exceptionHandler,
@@ -128,7 +134,9 @@ public class AsyncExecutionController<K> implements StateRequestHandler {
         this.keyAccountingUnit = new KeyAccountingUnit<>(maxInFlightRecords);
         this.mailboxExecutor = mailboxExecutor;
         this.exceptionHandler = exceptionHandler;
-        this.stateFutureFactory = new StateFutureFactory<>(this, mailboxExecutor, exceptionHandler);
+        this.callbackRunner = new BatchCallbackRunner(mailboxExecutor, this::notifyNewMail);
+        this.stateFutureFactory = new StateFutureFactory<>(this, callbackRunner, exceptionHandler);
+
         this.stateExecutor = stateExecutor;
         this.batchSize = batchSize;
         this.bufferTimeout = bufferTimeout;
@@ -204,8 +212,7 @@ public class AsyncExecutionController<K> implements StateRequestHandler {
                 stateRequestsBuffer.tryActivateOneByKey(toDispose.getKey());
         if (nextRecordCtx != null) {
             Preconditions.checkState(
-                    tryOccupyKey(nextRecordCtx),
-                    String.format("key(%s) is already occupied.", nextRecordCtx.getKey()));
+                    tryOccupyKey(nextRecordCtx));
         }
     }
 
@@ -344,12 +351,34 @@ public class AsyncExecutionController<K> implements StateRequestHandler {
             while (inFlightRecordNum.get() > targetNum) {
                 if (!mailboxExecutor.tryYield()) {
                     triggerIfNeeded(true);
-                    Thread.sleep(0);
+                    waitForNewMails();
                 }
             }
         } catch (InterruptedException ignored) {
             // ignore the interrupted exception to avoid throwing fatal error when the task cancel
             // or exit.
+        }
+    }
+
+    public void waitForNewMails() throws InterruptedException {
+        if (!callbackRunner.isHasMail()) {
+            synchronized (notifyLock) {
+                if (!callbackRunner.isHasMail()) {
+                    waitingMail = true;
+                    notifyLock.wait(1);
+                    waitingMail = false;
+                }
+            }
+        }
+    }
+
+    public void notifyNewMail() {
+        if (waitingMail) {
+            synchronized (notifyLock) {
+                if (waitingMail) {
+                    notifyLock.notify();
+                }
+            }
         }
     }
 

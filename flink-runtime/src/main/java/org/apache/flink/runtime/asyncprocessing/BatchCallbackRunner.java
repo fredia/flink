@@ -21,54 +21,46 @@ package org.apache.flink.runtime.asyncprocessing;
 import org.apache.flink.api.common.operators.MailboxExecutor;
 import org.apache.flink.util.function.ThrowingRunnable;
 
-import javax.annotation.concurrent.GuardedBy;
+import net.jcip.annotations.GuardedBy;
 
 import java.util.ArrayList;
 import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * A runner for {@link StateFutureFactory} to build {@link
- * org.apache.flink.core.state.InternalStateFuture} that put one mail in {@link MailboxExecutor}
- * whenever there are callbacks to run but run multiple callbacks within one mail.
+ * A {@link org.apache.flink.core.state.StateFutureImpl.CallbackRunner} that put one mail in {@link
+ * MailboxExecutor} but run multiple callbacks within one mail.
  */
 public class BatchCallbackRunner {
 
-    private static final int DEFAULT_BATCH_SIZE = 100;
+    private static final int DEFAULT_BATCH_SIZE = 3000;
 
     private final MailboxExecutor mailboxExecutor;
 
     private final int batchSize;
 
-    /** The callbacks divided in batch. */
     private final ConcurrentLinkedDeque<ArrayList<ThrowingRunnable<? extends Exception>>>
             callbackQueue;
 
-    /** The lock to protect the active buffer (batch). */
     private final Object activeBufferLock = new Object();
 
-    /** The active buffer (batch) to gather incoming callbacks. */
     @GuardedBy("activeBufferLock")
     private ArrayList<ThrowingRunnable<? extends Exception>> activeBuffer;
 
-    /** Counter of current callbacks. */
-    private final AtomicInteger currentCallbacks = new AtomicInteger(0);
+    private final AtomicInteger currentMails = new AtomicInteger(0);
 
-    /** Whether there is a mail in mailbox. */
     private volatile boolean hasMail = false;
 
-    BatchCallbackRunner(MailboxExecutor mailboxExecutor) {
+    private final Runnable newMailNotify;
+
+    BatchCallbackRunner(MailboxExecutor mailboxExecutor, Runnable newMailNotify) {
         this.mailboxExecutor = mailboxExecutor;
+        this.newMailNotify = newMailNotify;
         this.batchSize = DEFAULT_BATCH_SIZE;
         this.callbackQueue = new ConcurrentLinkedDeque<>();
         this.activeBuffer = new ArrayList<>();
     }
 
-    /**
-     * Submit a callback to run.
-     *
-     * @param task the callback.
-     */
     public void submit(ThrowingRunnable<? extends Exception> task) {
         synchronized (activeBufferLock) {
             activeBuffer.add(task);
@@ -77,25 +69,22 @@ public class BatchCallbackRunner {
                 activeBuffer = new ArrayList<>(batchSize);
             }
         }
-        currentCallbacks.incrementAndGet();
+        currentMails.incrementAndGet();
         insertMail(false);
     }
 
-    private void insertMail(boolean force) {
+    public void insertMail(boolean force) {
         if (force || !hasMail) {
-            if (currentCallbacks.get() > 0) {
+            if (currentMails.get() > 0) {
                 hasMail = true;
                 mailboxExecutor.execute(this::runBatch, "Batch running callback of state requests");
+                notifyNewMail();
             } else {
                 hasMail = false;
             }
         }
     }
 
-    /**
-     * Run at most a full batch of callbacks. If there has not been a full batch of callbacks, run
-     * current callbacks in active buffer.
-     */
     public void runBatch() throws Exception {
         ArrayList<ThrowingRunnable<? extends Exception>> batch = callbackQueue.poll();
         if (batch == null) {
@@ -110,8 +99,18 @@ public class BatchCallbackRunner {
             for (ThrowingRunnable<? extends Exception> task : batch) {
                 task.run();
             }
-            currentCallbacks.addAndGet(-batch.size());
+            currentMails.addAndGet(-batch.size());
         }
         insertMail(true);
+    }
+
+    private void notifyNewMail() {
+        if (newMailNotify != null) {
+            newMailNotify.run();
+        }
+    }
+
+    public boolean isHasMail() {
+        return hasMail;
     }
 }
