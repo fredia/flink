@@ -191,6 +191,11 @@ public class InternalKeyedStateTestBase {
         }
 
         @Override
+        public long ongoingRequests() {
+            return 0;
+        }
+
+        @Override
         public void shutdown() {}
 
         static class TestStateRequestContainer implements StateRequestContainer {

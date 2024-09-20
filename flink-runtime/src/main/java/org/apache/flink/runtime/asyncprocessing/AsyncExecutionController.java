@@ -146,6 +146,7 @@ public class AsyncExecutionController<K> implements StateRequestHandler {
         this.stateRequestsBuffer =
                 new StateRequestBuffer<>(
                         bufferTimeout,
+                        100,
                         (scheduledSeq) ->
                                 mailboxExecutor.execute(
                                         () -> {
@@ -350,7 +351,11 @@ public class AsyncExecutionController<K> implements StateRequestHandler {
         try {
             while (inFlightRecordNum.get() > targetNum) {
                 if (!mailboxExecutor.tryYield()) {
-                    triggerIfNeeded(true);
+                    // We force trigger the buffer if targetNum == 0 (for draining) or there is no
+                    // ongoing requests under execution.
+                    if (targetNum == 0 || stateExecutor.ongoingRequests() == 0L) {
+                        triggerIfNeeded(true);
+                    }
                     waitForNewMails();
                 }
             }

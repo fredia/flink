@@ -133,4 +133,8 @@ public class ForStStateRequestClassifier implements StateRequestContainer {
     public List<ForStDBIterRequest<?, ?, ?, ?, ?>> pollDbIterRequests() {
         return dbIterRequests;
     }
+
+    public long size() {
+        return dbGetRequests.size() + dbPutRequests.size() + dbIterRequests.size();
+    }
 }

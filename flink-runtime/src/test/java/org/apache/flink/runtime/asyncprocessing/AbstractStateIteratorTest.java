@@ -188,6 +188,11 @@ public class AbstractStateIteratorTest {
         }
 
         @Override
+        public long ongoingRequests() {
+            return 0;
+        }
+
+        @Override
         public void shutdown() {}
 
         static class TestIterator extends AbstractStateIterator<Integer> {

@@ -36,6 +36,7 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * The {@link StateExecutor} implementation which executing batch {@link StateRequest}s for
@@ -64,6 +65,8 @@ public class ForStStateExecutor implements StateExecutor {
 
     private Throwable executionError;
 
+    private final AtomicLong ongoing;
+
     public ForStStateExecutor(
             int readIoParallelism, int writeIoParallelism, RocksDB db, WriteOptions writeOptions) {
         this.coordinatorThread =
@@ -80,6 +83,7 @@ public class ForStStateExecutor implements StateExecutor {
                         new ExecutorThreadFactory("ForSt-write-IO"));
         this.db = db;
         this.writeOptions = writeOptions;
+        this.ongoing = new AtomicLong();
     }
 
     @Override
@@ -90,6 +94,8 @@ public class ForStStateExecutor implements StateExecutor {
         ForStStateRequestClassifier stateRequestClassifier =
                 (ForStStateRequestClassifier) stateRequestContainer;
         CompletableFuture<Void> resultFuture = new CompletableFuture<>();
+        final long size = stateRequestClassifier.size();
+        ongoing.addAndGet(size);
         coordinatorThread.execute(
                 () -> {
                     long startTime = System.currentTimeMillis();
@@ -129,6 +135,7 @@ public class ForStStateExecutor implements StateExecutor {
                                                 getRequests.size(),
                                                 iterRequests.size(),
                                                 duration);
+                                        ongoing.addAndGet(-size);
                                         resultFuture.complete(null);
                                     },
                                     coordinatorThread)
@@ -143,6 +150,7 @@ public class ForStStateExecutor implements StateExecutor {
                                             LOG.error("Close iterRequests fail", ioException);
                                         }
                                         executionError = e;
+                                        ongoing.addAndGet(-size);
                                         resultFuture.completeExceptionally(e);
                                         return null;
                                     });
@@ -154,6 +162,11 @@ public class ForStStateExecutor implements StateExecutor {
     public StateRequestContainer createStateRequestContainer() {
         checkState();
         return new ForStStateRequestClassifier();
+    }
+
+    @Override
+    public long ongoingRequests() {
+        return ongoing.get();
     }
 
     private void checkState() {

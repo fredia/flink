@@ -42,5 +42,10 @@ public class MockStateExecutor implements StateExecutor {
     }
 
     @Override
+    public long ongoingRequests() {
+        return 0;
+    }
+
+    @Override
     public void shutdown() {}
 }
