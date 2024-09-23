@@ -353,7 +353,7 @@ public class AsyncExecutionController<K> implements StateRequestHandler {
                 if (!mailboxExecutor.tryYield()) {
                     // We force trigger the buffer if targetNum == 0 (for draining) or there is no
                     // ongoing requests under execution.
-                    if (targetNum == 0 || stateExecutor.ongoingRequests() == 0L) {
+                    if (targetNum == 0 || !stateExecutor.fullyLoaded()) {
                         triggerIfNeeded(true);
                     }
                     waitForNewMails();
@@ -370,7 +370,7 @@ public class AsyncExecutionController<K> implements StateRequestHandler {
             synchronized (notifyLock) {
                 if (!callbackRunner.isHasMail()) {
                     waitingMail = true;
-                    notifyLock.wait(1);
+                    notifyLock.wait(5);
                     waitingMail = false;
                 }
             }

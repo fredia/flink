@@ -191,8 +191,8 @@ public class InternalKeyedStateTestBase {
         }
 
         @Override
-        public long ongoingRequests() {
-            return 0;
+        public boolean fullyLoaded() {
+            return false;
         }
 
         @Override

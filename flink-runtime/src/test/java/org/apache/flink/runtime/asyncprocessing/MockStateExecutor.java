@@ -42,8 +42,8 @@ public class MockStateExecutor implements StateExecutor {
     }
 
     @Override
-    public long ongoingRequests() {
-        return 0;
+    public boolean fullyLoaded() {
+        return false;
     }
 
     @Override

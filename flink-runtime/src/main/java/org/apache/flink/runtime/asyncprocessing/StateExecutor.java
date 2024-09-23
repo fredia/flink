@@ -45,12 +45,7 @@ public interface StateExecutor {
      */
     StateRequestContainer createStateRequestContainer();
 
-    /**
-     * Get the number of ongoing requests within this executor.
-     *
-     * @return the count.
-     */
-    long ongoingRequests();
+    boolean fullyLoaded();
 
     /** Shutdown the StateExecutor, and new committed state execution requests will be rejected. */
     void shutdown();

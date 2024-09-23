@@ -59,6 +59,8 @@ public class ForStStateExecutor implements StateExecutor {
     /** The worker thread that actually executes the write {@link StateRequest}s. */
     private final ExecutorService writeThreads;
 
+    private final int readThreadCount;
+
     private final RocksDB db;
 
     private final WriteOptions writeOptions;
@@ -81,6 +83,7 @@ public class ForStStateExecutor implements StateExecutor {
                 Executors.newFixedThreadPool(
                         writeIoParallelism,
                         new ExecutorThreadFactory("ForSt-write-IO"));
+        this.readThreadCount = readIoParallelism;
         this.db = db;
         this.writeOptions = writeOptions;
         this.ongoing = new AtomicLong();
@@ -94,8 +97,16 @@ public class ForStStateExecutor implements StateExecutor {
         ForStStateRequestClassifier stateRequestClassifier =
                 (ForStStateRequestClassifier) stateRequestContainer;
         CompletableFuture<Void> resultFuture = new CompletableFuture<>();
-        final long size = stateRequestClassifier.size();
-        ongoing.addAndGet(size);
+        List<ForStDBGetRequest<?, ?, ?, ?>> getRequests =
+                stateRequestClassifier.pollDbGetRequests();
+        List<ForStDBIterRequest<?, ?, ?, ?, ?>> iterRequests =
+                stateRequestClassifier.pollDbIterRequests();
+        if (!getRequests.isEmpty()) {
+            ongoing.addAndGet(3);
+        }
+        if (!iterRequests.isEmpty()) {
+            ongoing.addAndGet(iterRequests.size());
+        }
         coordinatorThread.execute(
                 () -> {
                     long startTime = System.currentTimeMillis();
@@ -109,19 +120,16 @@ public class ForStStateExecutor implements StateExecutor {
                         futures.add(writeOperations.process());
                     }
 
-                    List<ForStDBGetRequest<?, ?, ?, ?>> getRequests =
-                            stateRequestClassifier.pollDbGetRequests();
+
                     if (!getRequests.isEmpty()) {
                         ForStGeneralMultiGetOperation getOperations =
-                                new ForStGeneralMultiGetOperation(db, getRequests, readThreads);
+                                new ForStGeneralMultiGetOperation(db, getRequests, readThreads, ongoing::decrementAndGet);
                         futures.add(getOperations.process());
                     }
 
-                    List<ForStDBIterRequest<?, ?, ?, ?, ?>> iterRequests =
-                            stateRequestClassifier.pollDbIterRequests();
                     if (!iterRequests.isEmpty()) {
                         ForStIterateOperation iterOperations =
-                                new ForStIterateOperation(db, iterRequests, readThreads);
+                                new ForStIterateOperation(db, iterRequests, readThreads, ongoing::decrementAndGet);
                         futures.add(iterOperations.process());
                     }
 
@@ -135,7 +143,6 @@ public class ForStStateExecutor implements StateExecutor {
                                                 getRequests.size(),
                                                 iterRequests.size(),
                                                 duration);
-                                        ongoing.addAndGet(-size);
                                         resultFuture.complete(null);
                                     },
                                     coordinatorThread)
@@ -150,7 +157,6 @@ public class ForStStateExecutor implements StateExecutor {
                                             LOG.error("Close iterRequests fail", ioException);
                                         }
                                         executionError = e;
-                                        ongoing.addAndGet(-size);
                                         resultFuture.completeExceptionally(e);
                                         return null;
                                     });
@@ -165,8 +171,8 @@ public class ForStStateExecutor implements StateExecutor {
     }
 
     @Override
-    public long ongoingRequests() {
-        return ongoing.get();
+    public boolean fullyLoaded() {
+        return ongoing.get() >= readThreadCount;
     }
 
     private void checkState() {

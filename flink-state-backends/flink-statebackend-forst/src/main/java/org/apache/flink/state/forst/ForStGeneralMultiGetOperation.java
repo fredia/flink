@@ -41,11 +41,19 @@ public class ForStGeneralMultiGetOperation implements ForStDBOperation {
 
     private final Executor executor;
 
+    private final Runnable subprocessFinished;
+
     ForStGeneralMultiGetOperation(
             RocksDB db, List<ForStDBGetRequest<?, ?, ?, ?>> batchRequest, Executor executor) {
+        this(db, batchRequest, executor, null);
+    }
+
+    ForStGeneralMultiGetOperation(
+            RocksDB db, List<ForStDBGetRequest<?, ?, ?, ?>> batchRequest, Executor executor, Runnable subprocessFinished) {
         this.db = db;
         this.batchRequest = batchRequest;
         this.executor = executor;
+        this.subprocessFinished = subprocessFinished;
     }
 
     @Override
@@ -62,6 +70,9 @@ public class ForStGeneralMultiGetOperation implements ForStDBOperation {
                 if (counter.decrementAndGet() == 0
                         && !future.isCompletedExceptionally()) {
                     future.complete(null);
+                }
+                if (subprocessFinished != null) {
+                    subprocessFinished.run();
                 }
                 continue;
             }
@@ -92,6 +103,9 @@ public class ForStGeneralMultiGetOperation implements ForStDBOperation {
                             if (counter.decrementAndGet() == 0
                                     && !future.isCompletedExceptionally()) {
                                 future.complete(null);
+                            }
+                            if (subprocessFinished != null) {
+                                subprocessFinished.run();
                             }
                         }
                     });
