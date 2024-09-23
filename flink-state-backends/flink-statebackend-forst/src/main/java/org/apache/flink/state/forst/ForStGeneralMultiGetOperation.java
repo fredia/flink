@@ -26,6 +26,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * The general-purpose multiGet operation implementation for ForStDB, which simulates multiGet by
@@ -49,32 +51,52 @@ public class ForStGeneralMultiGetOperation implements ForStDBOperation {
     @Override
     public CompletableFuture<Void> process() {
         // TODO: Use MultiGet to optimize this implement
+        CompletableFuture<Void> future = new CompletableFuture<>();
 
-        return CompletableFuture.runAsync(
-                () -> {
-                    ReadOptions readOptions = new ReadOptions();
-                    readOptions.setReadaheadSize(0);
-                    List<byte[]> keys = new ArrayList<>(batchRequest.size());
-                    List<ColumnFamilyHandle> columnFamilyHandles =
-                            new ArrayList<>(batchRequest.size());
-                    try {
-                        for (int i = 0; i < batchRequest.size(); i++) {
-                            ForStDBGetRequest<?, ?, ?, ?> request = batchRequest.get(i);
-                            byte[] key = request.buildSerializedKey();
-                            keys.add(key);
-                            columnFamilyHandles.add(request.getColumnFamilyHandle());
+        AtomicReference<Exception> error = new AtomicReference<>();
+        AtomicInteger counter = new AtomicInteger(3);
+        for (int p = 0; p < 3; p++) {
+            int startIndex = batchRequest.size() * p / 3;
+            int endIndex = batchRequest.size() * (p + 1) / 3;
+            if (startIndex >= endIndex) {
+                if (counter.decrementAndGet() == 0
+                        && !future.isCompletedExceptionally()) {
+                    future.complete(null);
+                }
+                continue;
+            }
+            executor.execute(
+                    () -> {
+                        ReadOptions readOptions = new ReadOptions();
+                        readOptions.setReadaheadSize(0);
+
+                        List<byte[]> keys = new ArrayList<>(endIndex - startIndex);
+                        List<ColumnFamilyHandle> columnFamilyHandles =
+                                new ArrayList<>(endIndex - startIndex);
+                        try {
+                            for (int i = startIndex; i < endIndex; i++) {
+                                ForStDBGetRequest<?, ?, ?, ?> request = batchRequest.get(i);
+                                byte[] key = request.buildSerializedKey();
+                                keys.add(key);
+                                columnFamilyHandles.add(request.getColumnFamilyHandle());
+                            }
+                            List<byte[]> values =
+                                    db.multiGetAsList(readOptions, columnFamilyHandles, keys);
+                            for (int i = startIndex; i < endIndex; i++) {
+                                ForStDBGetRequest<?, ?, ?, ?> request = batchRequest.get(i);
+                                request.completeStateFuture(values.get(i - startIndex));
+                            }
+                        } catch (Exception e) {
+                            throw new RuntimeException(e);
+                        } finally {
+                            if (counter.decrementAndGet() == 0
+                                    && !future.isCompletedExceptionally()) {
+                                future.complete(null);
+                            }
                         }
-                        List<byte[]> values =
-                                db.multiGetAsList(readOptions, columnFamilyHandles, keys);
-                        for (int i = 0; i < batchRequest.size(); i++) {
-                            ForStDBGetRequest<?, ?, ?, ?> request = batchRequest.get(i);
-                            request.completeStateFuture(values.get(i));
-                        }
-                    } catch (Exception e) {
-                        throw new RuntimeException(e);
-                    }
-                },
-                executor);
+                    });
+        }
+        return future;
 
         //        CompletableFuture<Void> future = new CompletableFuture<>();
         //
