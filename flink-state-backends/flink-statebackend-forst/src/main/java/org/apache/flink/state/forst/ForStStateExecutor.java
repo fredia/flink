@@ -101,25 +101,21 @@ public class ForStStateExecutor implements StateExecutor {
                 stateRequestClassifier.pollDbGetRequests();
         List<ForStDBIterRequest<?, ?, ?, ?, ?>> iterRequests =
                 stateRequestClassifier.pollDbIterRequests();
+        List<ForStDBPutRequest<?, ?, ?>> putRequests =
+                stateRequestClassifier.pollDbPutRequests();
         if (!getRequests.isEmpty()) {
             ongoing.addAndGet(3);
         }
         if (!iterRequests.isEmpty()) {
             ongoing.addAndGet(iterRequests.size());
         }
+        if (!putRequests.isEmpty()) {
+            ongoing.addAndGet(3);
+        }
         coordinatorThread.execute(
                 () -> {
                     long startTime = System.currentTimeMillis();
-                    List<CompletableFuture<Void>> futures = new ArrayList<>(3);
-                    List<ForStDBPutRequest<?, ?, ?>> putRequests =
-                            stateRequestClassifier.pollDbPutRequests();
-                    if (!putRequests.isEmpty()) {
-                        ForStWriteBatchOperation writeOperations =
-                                new ForStWriteBatchOperation(
-                                        db, putRequests, writeOptions, writeThreads);
-                        futures.add(writeOperations.process());
-                    }
-
+                    List<CompletableFuture<Void>> futures = new ArrayList<>(2);
 
                     if (!getRequests.isEmpty()) {
                         ForStGeneralMultiGetOperation getOperations =
@@ -131,6 +127,14 @@ public class ForStStateExecutor implements StateExecutor {
                         ForStIterateOperation iterOperations =
                                 new ForStIterateOperation(db, iterRequests, readThreads, ongoing::decrementAndGet);
                         futures.add(iterOperations.process());
+                    }
+
+                    if (!putRequests.isEmpty()) {
+                        ForStWriteBatchOperation writeOperations =
+                                new ForStWriteBatchOperation(
+                                        db, putRequests, writeOptions, Runnable::run);
+                        writeOperations.process();
+                        ongoing.addAndGet(-3);
                     }
 
                     FutureUtils.combineAll(futures)
