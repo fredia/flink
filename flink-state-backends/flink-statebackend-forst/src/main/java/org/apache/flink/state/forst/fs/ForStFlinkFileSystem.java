@@ -24,7 +24,10 @@ import org.apache.flink.core.fs.BlockLocation;
 import org.apache.flink.core.fs.FileStatus;
 import org.apache.flink.core.fs.FileSystem;
 import org.apache.flink.core.fs.Path;
+import org.apache.flink.state.forst.fs.cache.FileCache;
 import org.apache.flink.util.Preconditions;
+
+import javax.annotation.Nullable;
 
 import java.io.IOException;
 import java.net.URI;
@@ -48,19 +51,28 @@ public class ForStFlinkFileSystem extends FileSystem {
 
     private static final Map<String, String> remoteLocalMapping = new ConcurrentHashMap<>();
     private static final Function<String, Boolean> miscFileFilter = s -> !s.endsWith(".sst");
+    private static Path cacheBase;
+    private static long cacheCapacity = 1024 * 1024 * 1024;
 
     private final FileSystem localFS;
     private final FileSystem delegateFS;
     private final String remoteBase;
     private final Function<String, Boolean> localFileFilter;
     private final String localBase;
-
-    public ForStFlinkFileSystem(FileSystem delegateFS, String remoteBase, String localBase) {
+    @Nullable
+    private final FileCache fileCache;
+    public ForStFlinkFileSystem(FileSystem delegateFS, String remoteBase, String localBase, @Nullable FileCache fileCache) {
         this.localFS = FileSystem.getLocalFileSystem();
         this.delegateFS = delegateFS;
         this.localFileFilter = miscFileFilter;
         this.remoteBase = remoteBase;
         this.localBase = localBase;
+        this.fileCache = fileCache;
+    }
+
+    public static void configureCache(Path path, long cacheCap) {
+        cacheBase = path;
+        cacheCapacity = cacheCap;
     }
 
     /**
@@ -75,7 +87,8 @@ public class ForStFlinkFileSystem extends FileSystem {
     public static FileSystem get(URI uri) throws IOException {
         String localBase = remoteLocalMapping.get(uri.toString());
         Preconditions.checkNotNull(localBase, "localBase is null, remote uri:" + uri);
-        return new ForStFlinkFileSystem(FileSystem.get(uri), uri.toString(), localBase);
+        return new ForStFlinkFileSystem(FileSystem.get(uri), uri.toString(), localBase,
+                cacheBase == null ? null : new FileCache(Integer.MAX_VALUE, cacheCapacity, cacheBase.getFileSystem(), cacheBase));
     }
 
     /**
