@@ -58,6 +58,23 @@ public class ForStOptions {
                                     "The remote directory where ForSt puts its SST files, fallback to %s if not configured.",
                                     LOCAL_DIRECTORIES.key()));
 
+    public static final ConfigOption<String> CACHE_DIRECTORY =
+            ConfigOptions.key("state.backend.forst.cache.dir")
+                    .stringType()
+                    .noDefaultValue()
+                    .withDescription(
+                            String.format(
+                                    "The directory where ForSt caches its SST files, fallback to %s/cache if not configured.",
+                                    LOCAL_DIRECTORIES.key()));
+
+    public static final ConfigOption<Long> CACHE_SIZE_BASE_LIMIT =
+            ConfigOptions.key("state.backend.forst.cache.size-based-limit")
+                    .longType()
+                    .defaultValue(-1L)
+                    .withDescription(
+                            "The size-based capacity limit of cache, a negative value means no cache will be used. "
+                                    + "When this value is greater than the actual available space, the actual available space will be used as the upper limit.");
+
     /** The options factory class for ForSt to create DBOptions and ColumnFamilyOptions. */
     public static final ConfigOption<String> OPTIONS_FACTORY =
             ConfigOptions.key("state.backend.forst.options-factory")
