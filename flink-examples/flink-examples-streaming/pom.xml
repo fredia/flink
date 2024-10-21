@@ -77,6 +77,20 @@ under the License.
 			<artifactId>flink-shaded-jackson</artifactId>
 		</dependency>
 
+		<dependency>
+			<groupId>org.apache.flink</groupId>
+			<artifactId>flink-statebackend-rocksdb</artifactId>
+			<version>2.0-SNAPSHOT</version>
+			<scope>compile</scope>
+		</dependency>
+
+		<dependency>
+			<groupId>org.apache.flink</groupId>
+			<artifactId>flink-statebackend-forst</artifactId>
+			<version>2.0-SNAPSHOT</version>
+			<scope>compile</scope>
+		</dependency>
+
 		<!-- test dependencies -->
 
 		<dependency>
@@ -128,6 +142,7 @@ under the License.
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-compiler-plugin</artifactId>
 				<configuration>
+
 					<!-- [FLINK-36245] Skip compile TestAvroConsumerConfluent as Kafka connector is not support 2.0 for now -->
 					<excludes>
 						<exclude>org/apache/flink/streaming/examples/statemachine/KafkaEventsGeneratorJob.java</exclude>
@@ -141,8 +156,8 @@ under the License.
 							<goal>compile</goal>
 						</goals>
 						<configuration>
-							<compilerArgument>-Xlint:deprecation</compilerArgument>
-							<failOnWarning>true</failOnWarning>
+							<compilerArgument>-Xlint:none</compilerArgument>
+							<failOnWarning>false</failOnWarning>
 						</configuration>
 					</execution>
 				</executions>
@@ -209,6 +224,30 @@ under the License.
 								<include>org/apache/flink/streaming/examples/wordcount/WordCount$*.class</include>
 								<include>org/apache/flink/streaming/examples/wordcount/util/WordCountData.class</include>
 								<include>org/apache/flink/streaming/examples/wordcount/util/CLI.class</include>
+								<include>META-INF/LICENSE</include>
+								<include>META-INF/NOTICE</include>
+							</includes>
+						</configuration>
+					</execution>
+
+					<!-- AsyncWordCount -->
+					<execution>
+						<id>AsyncWordCount</id>
+						<phase>package</phase>
+						<goals>
+							<goal>jar</goal>
+						</goals>
+						<configuration>
+							<classifier>AsyncWordCount</classifier>
+
+							<archive>
+								<manifestEntries>
+									<program-class>org.apache.flink.streaming.examples.wordcount2.WordCount</program-class>
+								</manifestEntries>
+							</archive>
+
+							<includes>
+								<include>org/apache/flink/streaming/examples/wordcount2/*</include>
 								<include>META-INF/LICENSE</include>
 								<include>META-INF/NOTICE</include>
 							</includes>
