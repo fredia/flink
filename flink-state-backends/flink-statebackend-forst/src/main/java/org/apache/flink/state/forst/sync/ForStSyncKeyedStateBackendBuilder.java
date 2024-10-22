@@ -107,9 +107,6 @@ public class ForStSyncKeyedStateBackendBuilder<K> extends AbstractKeyedStateBack
     /** Path where this configured instance stores its data directory. */
     private final File instanceBasePath;
 
-    /** Path where this configured instance stores its RocksDB database. */
-    private final File instanceForStDBPath;
-
     private final MetricGroup metricGroup;
     private final StateBackend.CustomInitializationMetrics customInitializationMetrics;
 
@@ -174,7 +171,6 @@ public class ForStSyncKeyedStateBackendBuilder<K> extends AbstractKeyedStateBack
         this.columnFamilyOptionsFactory = Preconditions.checkNotNull(columnFamilyOptionsFactory);
         this.optionsContainer = optionsContainer;
         this.instanceBasePath = instanceBasePath;
-        this.instanceForStDBPath = getInstanceRocksDBPath(instanceBasePath);
         this.metricGroup = metricGroup;
         this.customInitializationMetrics = customInitializationMetrics;
         this.enableIncrementalCheckpointing = false;
@@ -288,7 +284,7 @@ public class ForStSyncKeyedStateBackendBuilder<K> extends AbstractKeyedStateBack
             UUID backendUID = UUID.randomUUID();
             SortedMap<Long, Collection<HandleAndLocalPath>> materializedSstFiles = new TreeMap<>();
             long lastCompletedCheckpointId = -1L;
-            prepareDirectories();
+            optionsContainer.prepareDirectories();
             restoreOperation =
                     getRocksDBRestoreOperation(
                             keyGroupPrefixBytes,
@@ -368,7 +364,10 @@ public class ForStSyncKeyedStateBackendBuilder<K> extends AbstractKeyedStateBack
         }
         InternalKeyContext<K> keyContext =
                 new InternalKeyContextImpl<>(keyGroupRange, numberOfKeyGroups);
-        logger.info("Finished building RocksDB keyed state-backend at {}.", instanceBasePath);
+        logger.info(
+                "Finished building ForSt keyed state-backend at local base path: {}, remote base path: {}.",
+                optionsContainer.getLocalBasePath(),
+                optionsContainer.getRemoteBasePath());
         return new ForStSyncKeyedStateBackend<>(
                 this.userCodeClassLoader,
                 this.instanceBasePath,
@@ -407,10 +406,15 @@ public class ForStSyncKeyedStateBackendBuilder<K> extends AbstractKeyedStateBack
             LinkedHashMap<String, HeapPriorityQueueSnapshotRestoreWrapper<?>> registeredPQStates,
             ForStDBTtlCompactFiltersManager ttlCompactFiltersManager) {
 
+        File instanceForStPath =
+                optionsContainer.getRemoteForStPath() == null
+                        ? optionsContainer.getLocalForStPath()
+                        : new File("/");
+
         //  skip restore until ForStSyncKeyedStateBackend implement checkpoint
         return new ForStNoneRestoreOperation(
                 Collections.emptyMap(),
-                instanceForStDBPath,
+                instanceForStPath,
                 optionsContainer.getDbOptions(),
                 columnFamilyOptionsFactory,
                 nativeMetricOptions,
@@ -453,14 +457,5 @@ public class ForStSyncKeyedStateBackendBuilder<K> extends AbstractKeyedStateBack
 
     private HeapPriorityQueueSetFactory createHeapQueueFactory() {
         return new HeapPriorityQueueSetFactory(keyGroupRange, numberOfKeyGroups, 128);
-    }
-
-    private void prepareDirectories() throws IOException {
-        checkAndCreateDirectory(instanceBasePath);
-        if (instanceForStDBPath.exists()) {
-            // Clear the base directory when the backend is created
-            // in case something crashed and the backend never reached dispose()
-            FileUtils.deleteDirectory(instanceBasePath);
-        }
     }
 }

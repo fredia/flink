@@ -19,23 +19,21 @@
  *
  */
 
-package org.apache.flink.streaming.examples.wordcount2;
+package org.apache.flink.streaming.examples.wordcount3;
 
 import org.apache.flink.api.common.functions.FlatMapFunction;
 import org.apache.flink.api.common.functions.OpenContext;
 import org.apache.flink.api.common.functions.RichFlatMapFunction;
 import org.apache.flink.api.common.state.StateTtlConfig;
-import org.apache.flink.api.common.state.v2.ValueState;
+import org.apache.flink.api.common.state.ValueState;
+import org.apache.flink.api.common.state.ValueStateDescriptor;
 import org.apache.flink.api.common.typeinfo.TypeHint;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.api.java.tuple.Tuple2;
 import org.apache.flink.configuration.Configuration;
-import org.apache.flink.runtime.state.v2.ValueStateDescriptor;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
-import org.apache.flink.streaming.api.operators.StreamingRuntimeContext;
 import org.apache.flink.util.Collector;
-
 import org.apache.flink.util.ParameterTool;
 
 import org.slf4j.Logger;
@@ -44,7 +42,18 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.time.Duration;
 
-import static org.apache.flink.streaming.examples.wordcount2.JobConfig.*;
+import static org.apache.flink.streaming.examples.wordcount2.JobConfig.FLAT_MAP_PARALLELISM;
+import static org.apache.flink.streaming.examples.wordcount2.JobConfig.JOB_NAME;
+import static org.apache.flink.streaming.examples.wordcount2.JobConfig.SHARING_GROUP;
+import static org.apache.flink.streaming.examples.wordcount2.JobConfig.STATE_MODE;
+import static org.apache.flink.streaming.examples.wordcount2.JobConfig.StateMode;
+import static org.apache.flink.streaming.examples.wordcount2.JobConfig.TTL;
+import static org.apache.flink.streaming.examples.wordcount2.JobConfig.WORD_LENGTH;
+import static org.apache.flink.streaming.examples.wordcount2.JobConfig.WORD_NUMBER;
+import static org.apache.flink.streaming.examples.wordcount2.JobConfig.WORD_RATE;
+import static org.apache.flink.streaming.examples.wordcount2.JobConfig.configureCheckpoint;
+import static org.apache.flink.streaming.examples.wordcount2.JobConfig.getConfiguration;
+import static org.apache.flink.streaming.examples.wordcount2.JobConfig.setStateBackend;
 
 /**
  * Benchmark mainly used for {@link ValueState} and only support 1 parallelism.
@@ -104,8 +113,8 @@ public class WordCount {
 	}
 
 	private static FlatMapFunction<Tuple2<String, Long>, Long> getFlatMapFunction(Configuration configuration, long ttl) {
-		JobConfig.StateMode stateMode =
-			JobConfig.StateMode.valueOf(configuration.get(STATE_MODE).toUpperCase());
+		StateMode stateMode =
+			StateMode.valueOf(configuration.get(STATE_MODE).toUpperCase());
 
 		switch (stateMode) {
 			case MIXED:
@@ -129,17 +138,14 @@ public class WordCount {
 
 		@Override
 		public void flatMap(Tuple2<String, Long> in, Collector<Long> out) throws IOException {
-            wordCounter.asyncValue().thenAccept(currentValue -> {
-                if (currentValue != null) {
-                    wordCounter.asyncUpdate(currentValue + 1).thenAccept(empty -> {
-                        out.collect(currentValue + 1L);
-                    });
-                } else {
-                    wordCounter.asyncUpdate(1).thenAccept(empty -> {
-                        out.collect(1L);
-                    });
-                }
-            });
+            Integer val = wordCounter.value();
+            if (val!=null) {
+                wordCounter.update(val + 1);
+                out.collect(val + 1L);
+            } else {
+                wordCounter.update(1);
+                out.collect(1L);
+            }
 		}
 
 		@Override
@@ -157,7 +163,7 @@ public class WordCount {
 						.build();
 				descriptor.enableTimeToLive(ttlConfig);
 			}
-			wordCounter = ((StreamingRuntimeContext)getRuntimeContext()).getValueState(descriptor);
+			wordCounter = getRuntimeContext().getState(descriptor);
 		}
 	}
 }
