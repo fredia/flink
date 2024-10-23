@@ -80,14 +80,6 @@ class TtlListState<K, N, T>
     public Iterable<T> get() {
         Iterable<TtlValue<T>> ttlValue = original.get();
         ttlValue = ttlValue == null ? Collections.emptyList() : ttlValue;
-        if (updateTsOnRead) {
-            List<TtlValue<T>> collected = collect(ttlValue);
-            ttlValue = collected;
-            // the underlying state in backend is iterated in updateTs anyways
-            // to avoid reiterating backend in IteratorWithCleanup
-            // it is collected and iterated next time in memory
-            updateTs(collected);
-        }
         final Iterable<TtlValue<T>> finalResult = ttlValue;
         return () -> new IteratorWithCleanup(finalResult.iterator());
     }
@@ -129,20 +121,6 @@ class TtlListState<K, N, T>
             withTs.add(TtlUtils.wrapWithTs(value, currentTimestamp));
         }
         return withTs;
-    }
-
-    private void updateTs(List<TtlValue<T>> ttlValues) {
-        List<TtlValue<T>> unexpiredWithUpdatedTs = new ArrayList<>(ttlValues.size());
-        long currentTimestamp = timeProvider.currentTimestamp();
-        for (TtlValue<T> ttlValue : ttlValues) {
-            if (!TtlUtils.expired(ttlValue, ttl, currentTimestamp)) {
-                unexpiredWithUpdatedTs.add(
-                        TtlUtils.wrapWithTs(ttlValue.getUserValue(), currentTimestamp));
-            }
-        }
-        if (!unexpiredWithUpdatedTs.isEmpty()) {
-            original.update(unexpiredWithUpdatedTs);
-        }
     }
 
     private class IteratorWithCleanup implements Iterator<T> {
@@ -210,35 +188,14 @@ class TtlListState<K, N, T>
         public <U> StateFuture<Collection<U>> onNext(
                 Function<T, StateFuture<? extends U>> iterating) {
             Function<TtlValue<T>, StateFuture<? extends U>> ttlIterating =
-                    (item) -> {
-                        if (item == null) {
-                            return iterating.apply(null);
-                        }
-                        boolean unexpired = !expired(item);
-                        if (unexpired || returnExpired) {
-                            return iterating.apply(item.getUserValue());
-                        } else {
-                            return iterating.apply(null);
-                        }
-                    };
+                    (item) -> iterating.apply(getElementWithTtlCheck(item));
             return originalIterator.onNext(ttlIterating);
         }
 
         @Override
         public StateFuture<Void> onNext(Consumer<T> iterating) {
             Consumer<TtlValue<T>> ttlIterating =
-                    (item) -> {
-                        if (item == null) {
-                            iterating.accept(null);
-                            return;
-                        }
-                        boolean unexpired = !expired(item);
-                        if (unexpired || returnExpired) {
-                            iterating.accept(item.getUserValue());
-                        } else {
-                            iterating.accept(null);
-                        }
-                    };
+                    (item) -> iterating.accept(getElementWithTtlCheck(item));
             return originalIterator.onNext(ttlIterating);
         }
 
