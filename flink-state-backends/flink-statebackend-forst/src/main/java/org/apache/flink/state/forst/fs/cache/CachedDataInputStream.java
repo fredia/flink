@@ -60,7 +60,6 @@ public class CachedDataInputStream extends FSDataInputStream implements ByteBuff
     private void closeStream() {
         synchronized (lock) {
             if (fsdis != null) {
-                cacheEntry.closeForRead();
                 fsdis = null;
             }
         }
@@ -72,37 +71,57 @@ public class CachedDataInputStream extends FSDataInputStream implements ByteBuff
 
     @Override
     public void seek(long desired) throws IOException {
+        cacheEntry.retain();
         getStream().seek(desired);
+        cacheEntry.release();
     }
 
     @Override
     public long getPos() throws IOException {
-        return getStream().getPos();
+        cacheEntry.retain();
+        long pos = getStream().getPos();
+        cacheEntry.release();
+        return pos;
     }
 
     @Override
     public int read() throws IOException {
-        return getStream().read();
+        cacheEntry.retain();
+        int read = getStream().read();
+        cacheEntry.release();
+        return read;
     }
 
     @Override
     public int read(byte[] b) throws IOException {
-        return getStream().read(b);
+        cacheEntry.retain();
+        int read = getStream().read(b);
+        cacheEntry.release();
+        return read;
     }
 
     @Override
     public int read(byte[] b, int off, int len) throws IOException {
-        return getStream().read(b, off, len);
+        cacheEntry.retain();
+        int read = getStream().read(b, off, len);
+        cacheEntry.release();
+        return read;
     }
 
     @Override
     public long skip(long n) throws IOException {
-        return getStream().skip(n);
+        cacheEntry.retain();
+        long skipped = getStream().skip(n);
+        cacheEntry.release();
+        return skipped;
     }
 
     @Override
     public int available() throws IOException {
-        return getStream().available();
+        cacheEntry.retain();
+        int available = getStream().available();
+        cacheEntry.release();
+        return available;
     }
 
     @Override
@@ -111,23 +130,30 @@ public class CachedDataInputStream extends FSDataInputStream implements ByteBuff
     }
 
     @Override
-    public synchronized void mark(int readlimit) {
+    public void mark(int readlimit) {
         try {
+            cacheEntry.retain();
             getStream().mark(readlimit);
+            cacheEntry.release();
         } catch (Exception e) {
             LOG.warn("Mark error.", e);
         }
     }
 
     @Override
-    public synchronized void reset() throws IOException {
+    public void reset() throws IOException {
+        cacheEntry.retain();
         getStream().reset();
+        cacheEntry.release();
     }
 
     @Override
     public boolean markSupported() {
         try {
-            return getStream().markSupported();
+            cacheEntry.retain();
+            boolean support = getStream().markSupported();
+            cacheEntry.release();
+            return support;
         } catch (Exception e) {
             LOG.warn("MarkSupported error.", e);
         }
@@ -136,6 +162,7 @@ public class CachedDataInputStream extends FSDataInputStream implements ByteBuff
 
     @Override
     public int read(ByteBuffer bb) throws IOException {
+        cacheEntry.retain();
         byte[] tmp = new byte[bb.remaining()];
         int n = 0;
         while (n < tmp.length) {
@@ -148,13 +175,15 @@ public class CachedDataInputStream extends FSDataInputStream implements ByteBuff
         if (n > 0) {
             bb.put(tmp, 0, n);
         }
-        closeStream();
+        cacheEntry.release();
         return n;
     }
 
     @Override
     public int read(long position, ByteBuffer bb) throws IOException {
+        cacheEntry.retain();
         getStream().seek(position);
+        cacheEntry.release();
         return read(bb);
     }
 }

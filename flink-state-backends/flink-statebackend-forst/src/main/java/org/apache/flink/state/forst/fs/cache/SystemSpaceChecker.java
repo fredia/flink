@@ -31,28 +31,28 @@ public class SystemSpaceChecker implements CacheLimiter {
 
     private static final Logger LOG = LoggerFactory.getLogger(SystemSpaceChecker.class);
     private final long capacity;
-    private final long preservedSpace;
+    private final long reservedSize;
     private final File instanceBasePath;
     private long usageResource;
 
     public SystemSpaceChecker(
-            File instanceBasePath, long preservedSpace, long baseTargetFileSize, long capacity) {
+            File instanceBasePath, long reservedSize, long baseTargetFileSize, long capacity) {
         this.capacity = capacity;
-        this.preservedSpace = preservedSpace;
+        this.reservedSize = reservedSize;
         this.instanceBasePath = instanceBasePath;
         long initFreeSpace = instanceBasePath.getFreeSpace();
         long usageResource = 0;
-        if (initFreeSpace < preservedSpace || preservedSpace < baseTargetFileSize) {
+        if (initFreeSpace < reservedSize || reservedSize < baseTargetFileSize) {
 
             LOG.warn(
-                    "Illegal configuration of preserved space, current free space %s, preserved space %s "
+                    "Illegal configuration of preserved space, current free space %s, reserve space %s "
                             + "and base targetFile size %s on instance base path %s.",
-                    initFreeSpace, preservedSpace, baseTargetFileSize, instanceBasePath);
+                    initFreeSpace, reservedSize, baseTargetFileSize, instanceBasePath);
         }
         LOG.info(
                 "Creating os file space checker with initFreeSpace {} and preserved space {}",
                 initFreeSpace,
-                preservedSpace);
+                reservedSize);
     }
 
     private boolean isOverSpace(long toAddSize, long leftSpace) {
@@ -62,12 +62,12 @@ public class SystemSpaceChecker implements CacheLimiter {
 
     @Override
     public boolean isOverflow(long toAddSize) {
-        return isOverSpace(toAddSize, preservedSpace);
+        return isOverSpace(toAddSize, reservedSize);
     }
 
     @Override
     public boolean acquire(long toAddSize) {
-        if (isOverSpace(toAddSize, preservedSpace)) {
+        if (isOverSpace(toAddSize, reservedSize)) {
             return false;
         }
         usageResource += toAddSize;

@@ -74,6 +74,14 @@ public class ForStOptions {
                     .withDescription(
                             "The size-based capacity limit of cache, a negative value means no cache will be used. "
                                     + "When this value is greater than the actual available space, the actual available space will be used as the upper limit.");
+    public static final ConfigOption<Long> CACHE_RESERVED_SIZE =
+            ConfigOptions.key("state.backend.forst.cache.reserve-size")
+                    .longType()
+                    .defaultValue(0L)
+                    .withDescription(
+                            String.format(
+                                    "The reserved size of cache, which should be non-negative and be less than the %s.",
+                                    CACHE_SIZE_BASE_LIMIT.key()));
 
     /** The options factory class for ForSt to create DBOptions and ColumnFamilyOptions. */
     public static final ConfigOption<String> OPTIONS_FACTORY =

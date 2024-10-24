@@ -64,17 +64,13 @@ public class FileCacheEntry extends ReferenceCounted {
     }
 
     FSDataInputStream openForRead() throws IOException {
-        if (!closed && tryRetain() > 0) {
+        if (!closed) {
             if (fsDataInputStream == null) {
                 fsDataInputStream = cacheFs.open(cachePath);
             }
             return fsDataInputStream;
         }
         return null;
-    }
-
-    public void closeForRead() {
-        release();
     }
 
     public void invalidate() {

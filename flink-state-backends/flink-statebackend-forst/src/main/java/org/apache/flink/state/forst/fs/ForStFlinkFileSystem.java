@@ -60,6 +60,7 @@ public class ForStFlinkFileSystem extends FileSystem {
     private static final Function<String, Boolean> miscFileFilter = s -> !s.endsWith(".sst");
     private static Path cacheBase;
     private static long cacheCapacity = Long.MAX_VALUE;
+    private static long cacheReservedSize = 0;
 
     private final FileSystem localFS;
     private final FileSystem delegateFS;
@@ -87,10 +88,11 @@ public class ForStFlinkFileSystem extends FileSystem {
      * @param path the cache base path.
      * @param cacheCap the cache capacity.
      */
-    public static void configureCache(Path path, long cacheCap) {
+    public static void configureCache(Path path, long cacheCap, long reserveSize) {
         cacheBase = path;
         if (cacheCap > 0) {
             cacheCapacity = cacheCap;
+            cacheReservedSize = reserveSize;
         }
     }
 
@@ -116,7 +118,7 @@ public class ForStFlinkFileSystem extends FileSystem {
                                 Integer.MAX_VALUE,
                                 new SystemSpaceChecker(
                                         new File(localBase),
-                                        SST_FILE_SIZE,
+                                        cacheReservedSize,
                                         SST_FILE_SIZE,
                                         cacheCapacity),
                                 cacheBase.getFileSystem(),

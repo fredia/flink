@@ -57,6 +57,7 @@ import java.util.Arrays;
 import java.util.Collection;
 
 import static org.apache.flink.state.forst.ForStOptions.CACHE_DIRECTORY;
+import static org.apache.flink.state.forst.ForStOptions.CACHE_RESERVED_SIZE;
 import static org.apache.flink.state.forst.ForStOptions.CACHE_SIZE_BASE_LIMIT;
 
 /**
@@ -86,6 +87,8 @@ public final class ForStResourceContainer implements AutoCloseable {
     @Nullable private Path cacheBasePath;
 
     private long cacheCapacity;
+
+    private long cacheReservedSize;
 
     /** The configurations from file. */
     private final ReadableConfig configuration;
@@ -146,6 +149,7 @@ public final class ForStResourceContainer implements AutoCloseable {
         this.handlesToClose = new ArrayList<>();
         this.cacheBasePath = configuration.getOptional(CACHE_DIRECTORY).map(Path::new).orElse(null);
         this.cacheCapacity = configuration.get(CACHE_SIZE_BASE_LIMIT);
+        this.cacheReservedSize = configuration.get(CACHE_RESERVED_SIZE);
     }
 
     /** Gets the ForSt {@link DBOptions} to be used for ForSt instances. */
@@ -334,7 +338,7 @@ public final class ForStResourceContainer implements AutoCloseable {
                         "Cache base path is not configured, set to local base path: {}",
                         cacheBasePath);
             }
-            ForStFlinkFileSystem.configureCache(cacheBasePath, cacheCapacity);
+            ForStFlinkFileSystem.configureCache(cacheBasePath, cacheCapacity, cacheReservedSize);
         }
     }
 

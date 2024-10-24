@@ -254,7 +254,7 @@ public class ForStFlinkFileSystemTest {
                 fileSystem.open(new org.apache.flink.core.fs.Path(remotePath, "1.sst"));
 
         assertThat(is.read(tmpBytes)).isEqualTo(233);
-        assertThat(cacheEntry.getReferenceCount()).isEqualTo(2);
+        assertThat(cacheEntry.getReferenceCount()).isEqualTo(1);
         is.close();
         assertThat(cacheEntry.getReferenceCount()).isEqualTo(1);
 
