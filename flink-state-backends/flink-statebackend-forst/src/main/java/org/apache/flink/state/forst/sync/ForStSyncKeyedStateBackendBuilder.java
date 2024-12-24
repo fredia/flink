@@ -21,6 +21,7 @@ package org.apache.flink.state.forst.sync;
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.api.common.ExecutionConfig;
 import org.apache.flink.api.common.typeutils.TypeSerializer;
+import org.apache.flink.core.execution.RecoveryClaimMode;
 import org.apache.flink.core.fs.CloseableRegistry;
 import org.apache.flink.core.fs.Path;
 import org.apache.flink.metrics.MetricGroup;
@@ -457,7 +458,10 @@ public class ForStSyncKeyedStateBackendBuilder<K> extends AbstractKeyedStateBack
                         ? ForStFlinkFileSystem.get(optionsContainer.getRemoteForStPath().toUri())
                         : null;
         ForStStateDataTransfer stateTransfer =
-                new ForStStateDataTransfer(ForStStateDataTransfer.DEFAULT_THREAD_NUM, forStFs);
+                new ForStStateDataTransfer(
+                        ForStStateDataTransfer.DEFAULT_THREAD_NUM,
+                        RecoveryClaimMode.NO_CLAIM,
+                        forStFs);
 
         if (enableIncrementalCheckpointing) {
             return new ForStIncrementalSnapshotStrategy<>(
@@ -534,7 +538,8 @@ public class ForStSyncKeyedStateBackendBuilder<K> extends AbstractKeyedStateBack
                             restoreStateHandles, IncrementalRemoteKeyedStateHandle.class),
                     overlapFractionThreshold,
                     useIngestDbRestoreMode,
-                    rescalingUseDeleteFilesInRange);
+                    rescalingUseDeleteFilesInRange,
+                    RecoveryClaimMode.NO_CLAIM);
         } else if (priorityQueueConfig.getPriorityQueueStateType()
                 == ForStStateBackend.PriorityQueueStateType.HEAP) {
             // Note: This branch can be touched after ForSt Support canonical savepoint,

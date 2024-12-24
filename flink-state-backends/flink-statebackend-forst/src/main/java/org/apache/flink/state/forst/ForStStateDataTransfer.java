@@ -17,6 +17,7 @@
 
 package org.apache.flink.state.forst;
 
+import org.apache.flink.core.execution.RecoveryClaimMode;
 import org.apache.flink.core.fs.CloseableRegistry;
 import org.apache.flink.core.fs.FSDataInputStream;
 import org.apache.flink.core.fs.FileSystem;
@@ -70,11 +71,15 @@ public class ForStStateDataTransfer implements Closeable {
 
     private final ForStFlinkFileSystem forStFs;
 
+    private final RecoveryClaimMode recoveryClaimMode;
+
     public ForStStateDataTransfer(int threadNum) {
-        this(threadNum, null);
+        this(threadNum, RecoveryClaimMode.NO_CLAIM, null);
     }
 
-    public ForStStateDataTransfer(int threadNum, FileSystem forStFs) {
+    public ForStStateDataTransfer(
+            int threadNum, RecoveryClaimMode recoveryClaimMode, FileSystem forStFs) {
+        this.recoveryClaimMode = recoveryClaimMode;
         if (forStFs instanceof ForStFlinkFileSystem) {
             this.forStFs = (ForStFlinkFileSystem) forStFs;
         } else {
@@ -369,9 +374,12 @@ public class ForStStateDataTransfer implements Closeable {
 
         FileSystem targetFs = forStFs != null ? forStFs : targetPath.getFileSystem();
 
+        // TODO: Use fast duplicate when no-claim mode.
+
         Optional<Path> optionalPath = sourceHandle.maybeGetPath();
         int linkStatus = -1;
-        if (optionalPath.isPresent()
+        if (recoveryClaimMode == RecoveryClaimMode.CLAIM
+                && optionalPath.isPresent()
                 && forStFs != null
                 && !ForStFlinkFileSystem.miscFileFilter.apply(optionalPath.get().getName())) {
             linkStatus = forStFs.link(optionalPath.get(), targetPath);
