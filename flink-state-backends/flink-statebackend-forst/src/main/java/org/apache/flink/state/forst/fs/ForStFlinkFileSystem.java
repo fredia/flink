@@ -63,7 +63,7 @@ public class ForStFlinkFileSystem extends FileSystem {
 
     private static final long SST_FILE_SIZE = 1024 * 1024 * 64;
 
-    private static final Function<String, Boolean> miscFileFilter = s -> !s.endsWith(".sst");
+    public static final Function<String, Boolean> miscFileFilter = s -> !s.endsWith(".sst");
 
     private final FileSystem localFS;
     private final FileSystem delegateFS;
@@ -272,7 +272,8 @@ public class ForStFlinkFileSystem extends FileSystem {
         }
         Path truePath = new Path(fileMappingManager.originalPath(path.toString()));
         try {
-            return delegateFS.getFileStatus(truePath);
+            FileStatus fileStatus = delegateFS.getFileStatus(truePath);
+            return new RenamedFileStatus(fileStatus, path);
         } catch (FileNotFoundException e) {
             throw new FileNotFoundException(truePath.toString());
         }
@@ -320,48 +321,13 @@ public class ForStFlinkFileSystem extends FileSystem {
 
         for (int index = 0; index < localFileNum; index++) {
             final FileStatus localFile = localFiles[index];
-            fileStatuses.add(
-                    new FileStatus() {
-                        @Override
-                        public long getLen() {
-                            return localFile.getLen();
-                        }
-
-                        @Override
-                        public long getBlockSize() {
-                            return localFile.getBlockSize();
-                        }
-
-                        @Override
-                        public short getReplication() {
-                            return localFile.getReplication();
-                        }
-
-                        @Override
-                        public long getModificationTime() {
-                            return localFile.getModificationTime();
-                        }
-
-                        @Override
-                        public long getAccessTime() {
-                            return localFile.getAccessTime();
-                        }
-
-                        @Override
-                        public boolean isDir() {
-                            return localFile.isDir();
-                        }
-
-                        @Override
-                        public Path getPath() {
-                            if (localFile.getPath().toString().length() == localBase.length()) {
-                                return new Path(remoteBase);
-                            }
-                            return new Path(
+            Path remotePath =
+                    localFile.getPath().toString().length() == localBase.length()
+                            ? new Path(remoteBase)
+                            : new Path(
                                     remoteBase,
                                     localFile.getPath().toString().substring(localBase.length()));
-                        }
-                    });
+            fileStatuses.add(new RenamedFileStatus(localFile, remotePath));
         }
         return fileStatuses.toArray(new FileStatus[0]);
     }
@@ -414,5 +380,51 @@ public class ForStFlinkFileSystem extends FileSystem {
 
     public int link(Path src, Path dst) throws IOException {
         return fileMappingManager.put(src.toString(), dst.toString());
+    }
+
+    private static class RenamedFileStatus implements FileStatus {
+
+        private FileStatus originalFileStatus;
+        private Path path;
+
+        public RenamedFileStatus(FileStatus fileStatus, Path path) {
+            this.originalFileStatus = fileStatus;
+            this.path = path;
+        }
+
+        @Override
+        public long getLen() {
+            return originalFileStatus.getLen();
+        }
+
+        @Override
+        public long getBlockSize() {
+            return originalFileStatus.getBlockSize();
+        }
+
+        @Override
+        public short getReplication() {
+            return originalFileStatus.getReplication();
+        }
+
+        @Override
+        public long getModificationTime() {
+            return originalFileStatus.getModificationTime();
+        }
+
+        @Override
+        public long getAccessTime() {
+            return originalFileStatus.getAccessTime();
+        }
+
+        @Override
+        public boolean isDir() {
+            return originalFileStatus.isDir();
+        }
+
+        @Override
+        public Path getPath() {
+            return path;
+        }
     }
 }

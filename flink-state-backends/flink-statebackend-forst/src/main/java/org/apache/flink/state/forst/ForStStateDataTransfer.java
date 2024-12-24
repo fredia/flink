@@ -27,6 +27,7 @@ import org.apache.flink.runtime.state.CheckpointedStateScope;
 import org.apache.flink.runtime.state.IncrementalKeyedStateHandle.HandleAndLocalPath;
 import org.apache.flink.runtime.state.StateUtil;
 import org.apache.flink.runtime.state.StreamStateHandle;
+import org.apache.flink.state.forst.fs.ForStFlinkFileSystem;
 import org.apache.flink.util.ExceptionUtils;
 import org.apache.flink.util.FlinkRuntimeException;
 import org.apache.flink.util.IOUtils;
@@ -46,6 +47,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -66,14 +68,18 @@ public class ForStStateDataTransfer implements Closeable {
 
     protected final ExecutorService executorService;
 
-    private final FileSystem forStFs;
+    private final ForStFlinkFileSystem forStFs;
 
     public ForStStateDataTransfer(int threadNum) {
         this(threadNum, null);
     }
 
     public ForStStateDataTransfer(int threadNum, FileSystem forStFs) {
-        this.forStFs = forStFs;
+        if (forStFs instanceof ForStFlinkFileSystem) {
+            this.forStFs = (ForStFlinkFileSystem) forStFs;
+        } else {
+            this.forStFs = null;
+        }
         if (threadNum > 1) {
             executorService =
                     Executors.newFixedThreadPool(
@@ -363,7 +369,16 @@ public class ForStStateDataTransfer implements Closeable {
 
         FileSystem targetFs = forStFs != null ? forStFs : targetPath.getFileSystem();
 
-        // TODO: Use fast duplicate if possible.
+        Optional<Path> optionalPath = sourceHandle.maybeGetPath();
+        int linkStatus = -1;
+        if (optionalPath.isPresent()
+                && forStFs != null
+                && !ForStFlinkFileSystem.miscFileFilter.apply(optionalPath.get().getName())) {
+            linkStatus = forStFs.link(optionalPath.get(), targetPath);
+        }
+        if (linkStatus != -1) {
+            return;
+        }
 
         try {
             FSDataInputStream input = sourceHandle.openInputStream();
