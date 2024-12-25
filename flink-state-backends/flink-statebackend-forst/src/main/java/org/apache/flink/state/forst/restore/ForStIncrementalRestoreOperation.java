@@ -430,6 +430,7 @@ public class ForStIncrementalRestoreOperation<K> implements ForStRestoreOperatio
         final SystemClock clock = SystemClock.getInstance();
         final long startTime = clock.relativeTimeMillis();
         runnable.run();
+        logger.info("[Restore] {} took {} ms", metricName , (clock.relativeTimeMillis() - startTime));
         customInitializationMetrics.addMetric(metricName, clock.relativeTimeMillis() - startTime);
     }
 

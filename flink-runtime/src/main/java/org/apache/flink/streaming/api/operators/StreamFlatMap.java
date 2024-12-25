@@ -19,11 +19,12 @@ package org.apache.flink.streaming.api.operators;
 
 import org.apache.flink.annotation.Internal;
 import org.apache.flink.api.common.functions.FlatMapFunction;
+import org.apache.flink.runtime.asyncprocessing.operators.AbstractAsyncStateUdfStreamOperator;
 import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
 
 /** A {@link StreamOperator} for executing {@link FlatMapFunction FlatMapFunctions}. */
 @Internal
-public class StreamFlatMap<IN, OUT> extends AbstractUdfStreamOperator<OUT, FlatMapFunction<IN, OUT>>
+public class StreamFlatMap<IN, OUT> extends AbstractAsyncStateUdfStreamOperator<OUT, FlatMapFunction<IN, OUT>>
         implements OneInputStreamOperator<IN, OUT> {
 
     private static final long serialVersionUID = 1L;

@@ -384,6 +384,7 @@ public class ForStStateDataTransfer implements Closeable {
                 && !ForStFlinkFileSystem.miscFileFilter.apply(optionalPath.get().getName())) {
             linkStatus = forStFs.link(optionalPath.get(), targetPath);
         }
+        LOG.info("Try to link file {} to {} with status {} {}", optionalPath, targetPath, linkStatus, recoveryClaimMode);
         if (linkStatus != -1) {
             return;
         }

@@ -36,6 +36,7 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
@@ -72,6 +73,8 @@ public class ForStStateExecutor implements StateExecutor {
 
     /** The ongoing sub-processes count. */
     private final AtomicLong ongoing;
+
+    private boolean closed;
 
     public ForStStateExecutor(
             boolean coordinatorInline,
@@ -127,12 +130,16 @@ public class ForStStateExecutor implements StateExecutor {
         this.db = db;
         this.writeOptions = writeOptions;
         this.ongoing = new AtomicLong();
+        this.closed = false;
     }
 
     @Override
     public CompletableFuture<Void> executeBatchRequests(
             StateRequestContainer stateRequestContainer) {
         checkState();
+        if (closed) {
+            return CompletableFuture.completedFuture(null);
+        }
         Preconditions.checkArgument(stateRequestContainer instanceof ForStStateRequestClassifier);
         ForStStateRequestClassifier stateRequestClassifier =
                 (ForStStateRequestClassifier) stateRequestContainer;
@@ -237,11 +244,21 @@ public class ForStStateExecutor implements StateExecutor {
     @Override
     public void shutdown() {
         // Coordinator should be shutdown before others, since it submit jobs to others.
-        coordinatorThread.shutdown();
-        readThreads.shutdown();
+        this.closed = true;
+        shutdownAndWait(coordinatorThread);
+        shutdownAndWait(readThreads);
         if (!sharedWriteThread) {
-            writeThreads.shutdown();
+           shutdownAndWait(writeThreads);
         }
         LOG.info("Shutting down the ForStStateExecutor.");
+    }
+
+    private void shutdownAndWait(ExecutorService executorService) {
+        try {
+            executorService.shutdown();
+            while (!executorService.awaitTermination(60, TimeUnit.SECONDS)) {}
+        } catch (InterruptedException e) {
+            executorService.shutdownNow();
+        }
     }
 }
