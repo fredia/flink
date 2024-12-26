@@ -34,7 +34,7 @@ import static org.apache.flink.util.Preconditions.checkState;
  * Table operator to invoke close always. This is a base class for both batch and stream operators
  * without key.
  *
- * <p>This class is nearly identical with {@link TableStreamOperator}, but extending from {@link *
+ * <p>This class is nearly identical with {@link TableStreamOperator}, but extending from {@link
  * AbstractAsyncStateStreamOperator} to integrate with asynchronous state access.
  */
 public abstract class AsyncStateTableStreamOperator<OUT>
@@ -70,10 +70,9 @@ public abstract class AsyncStateTableStreamOperator<OUT>
                                         environment.getUserCodeClassLoader().asClassLoader()));
     }
 
-    @Override
-    public void processWatermark(Watermark mark) throws Exception {
+    public Watermark preProcessWatermark(Watermark mark) throws Exception {
         currentWatermark = mark.getTimestamp();
-        super.processWatermark(mark);
+        return super.preProcessWatermark(mark);
     }
 
     /** Information available in an invocation of processElement. */
