@@ -24,7 +24,6 @@ import org.apache.flink.api.dag.Transformation;
 import org.apache.flink.configuration.ReadableConfig;
 import org.apache.flink.streaming.api.operators.KeyedProcessOperator;
 import org.apache.flink.streaming.api.operators.StreamOperator;
-import org.apache.flink.streaming.api.operators.asyncprocessing.AsyncStateKeyedProcessOperator;
 import org.apache.flink.streaming.api.transformations.OneInputTransformation;
 import org.apache.flink.table.api.TableException;
 import org.apache.flink.table.api.config.ExecutionConfigOptions;
@@ -394,7 +393,7 @@ public class StreamExecRank extends ExecNodeBase<RowData>
 
         StreamOperator<RowData> operator;
         if (processFunction instanceof AbstractAsyncSyncStateTopNFunction) {
-            operator = new AsyncStateKeyedProcessOperator<>(processFunction);
+            operator = new AsyncKeyedProcessOperator<>(processFunction);
             processFunction.setKeyContext(operator);
         } else {
             operator = new KeyedProcessOperator<>(processFunction);

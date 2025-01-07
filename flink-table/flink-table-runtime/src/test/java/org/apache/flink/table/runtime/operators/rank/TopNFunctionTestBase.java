@@ -19,9 +19,9 @@
 package org.apache.flink.table.runtime.operators.rank;
 
 import org.apache.flink.api.common.state.StateTtlConfig;
+import org.apache.flink.runtime.asyncprocessing.operators.AsyncKeyedProcessOperator;
 import org.apache.flink.runtime.checkpoint.OperatorSubtaskState;
 import org.apache.flink.streaming.api.operators.KeyedProcessOperator;
-import org.apache.flink.streaming.api.operators.asyncprocessing.AsyncStateKeyedProcessOperator;
 import org.apache.flink.streaming.util.KeyedOneInputStreamOperatorTestHarness;
 import org.apache.flink.streaming.util.OneInputStreamOperatorTestHarness;
 import org.apache.flink.table.data.RowData;
@@ -392,8 +392,8 @@ abstract class TopNFunctionTestBase {
     OneInputStreamOperatorTestHarness<RowData, RowData> createTestHarness(
             AbstractTopNFunction rankFunction) throws Exception {
         if (enableAsyncState) {
-            AsyncStateKeyedProcessOperator<RowData, RowData, RowData> operator =
-                    new AsyncStateKeyedProcessOperator<>(rankFunction);
+            AsyncKeyedProcessOperator<RowData, RowData, RowData> operator =
+                    new AsyncKeyedProcessOperator<>(rankFunction);
             rankFunction.setKeyContext(operator);
             return new KeyedOneInputStreamOperatorTestHarness<>(
                     operator, keySelector, keySelector.getProducedType());

@@ -21,13 +21,13 @@ import org.apache.flink.api.common.typeinfo.TypeInformation
 import org.apache.flink.api.dag.Transformation
 import org.apache.flink.api.java.functions.KeySelector
 import org.apache.flink.configuration.Configuration
+import org.apache.flink.runtime.asyncprocessing.operators.AsyncKeyedProcessOperator
 import org.apache.flink.runtime.state.{CheckpointStorage, StateBackend}
 import org.apache.flink.runtime.state.hashmap.HashMapStateBackend
 import org.apache.flink.runtime.state.storage.{FileSystemCheckpointStorage, JobManagerCheckpointStorage}
 import org.apache.flink.state.rocksdb.EmbeddedRocksDBStateBackend
 import org.apache.flink.streaming.api.datastream.DataStream
 import org.apache.flink.streaming.api.operators.{OneInputStreamOperator, SimpleOperatorFactory}
-import org.apache.flink.streaming.api.operators.asyncprocessing.AsyncStateKeyedProcessOperator
 import org.apache.flink.streaming.api.transformations.{OneInputTransformation, PartitionTransformation}
 import org.apache.flink.streaming.api.watermark.Watermark
 import org.apache.flink.streaming.util.{KeyedOneInputStreamOperatorTestHarness, OneInputStreamOperatorTestHarness}
@@ -132,7 +132,7 @@ class HarnessTestBase(mode: StateBackendMode) extends StreamingTestBase {
     testHarness.getOperatorFactory
       .asInstanceOf[SimpleOperatorFactory[_]]
       .getOperator
-      .isInstanceOf[AsyncStateKeyedProcessOperator[_, _, _]]
+      .isInstanceOf[AsyncKeyedProcessOperator[_, _, _]]
   }
 }
 
