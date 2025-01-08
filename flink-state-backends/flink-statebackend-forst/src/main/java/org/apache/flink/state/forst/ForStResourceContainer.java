@@ -396,9 +396,8 @@ public final class ForStResourceContainer implements AutoCloseable {
         }
     }
 
-    private void clearDirectories(Path basePath) throws IOException {
-        FileSystem fileSystem =
-                forStFileSystem != null ? forStFileSystem : basePath.getFileSystem();
+    private static void clearDirectories(Path basePath) throws IOException {
+        FileSystem fileSystem = basePath.getFileSystem();
         if (fileSystem.exists(basePath)) {
             fileSystem.delete(basePath, true);
         }
@@ -487,11 +486,11 @@ public final class ForStResourceContainer implements AutoCloseable {
         if (logDir == null || logDir.isEmpty()) {
             if (localForStPath == null
                     || localForStPath.getPath().length() <= INSTANCE_PATH_LENGTH_LIMIT) {
-                relocateDefaultDbLogDir(currentOptions);
+                // relocateDefaultDbLogDir(currentOptions);
             } else if (remoteForStPath != null) { // log must put in local
                 Path relocatedPath = localForStPath.getParent().getParent();
                 LOG.warn("ForSt remote path is not null, relocate log in  {}.", relocatedPath);
-                currentOptions.setDbLogDir(relocatedPath.toString());
+               // currentOptions.setDbLogDir(relocatedPath.toString());
             } else {
                 // disable log relocate when instance path length exceeds limit to prevent ForSt
                 // log file creation failure, details in FLINK-31743
