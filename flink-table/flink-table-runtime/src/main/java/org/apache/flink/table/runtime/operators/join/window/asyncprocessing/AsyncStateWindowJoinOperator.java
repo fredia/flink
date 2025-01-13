@@ -24,6 +24,7 @@ import org.apache.flink.api.common.state.v2.StateFuture;
 import org.apache.flink.api.common.state.v2.StateIterator;
 import org.apache.flink.api.common.typeutils.TypeSerializer;
 import org.apache.flink.api.common.typeutils.base.LongSerializer;
+import org.apache.flink.core.state.StateFutureUtils;
 import org.apache.flink.runtime.state.v2.ListStateDescriptor;
 import org.apache.flink.runtime.state.v2.internal.InternalListState;
 import org.apache.flink.streaming.api.operators.InternalTimer;
@@ -196,15 +197,19 @@ public class AsyncStateWindowJoinOperator extends AsyncStateTableStreamOperator<
                 rightDataFuture,
                 (leftDataIterator, rightDataIterator) -> {
                     StateFuture<Void> leftLoadToMemFuture =
-                            leftDataIterator.onNext(
-                                    data -> {
-                                        leftDataRef.get().add(data);
-                                    });
+                            leftDataIterator != null
+                                    ? leftDataIterator.onNext(
+                                            data -> {
+                                                leftDataRef.get().add(data);
+                                            })
+                                    : StateFutureUtils.completedVoidFuture();
                     StateFuture<Void> rightLoadToMemFuture =
-                            rightDataIterator.onNext(
-                                    data -> {
-                                        rightDataRef.get().add(data);
-                                    });
+                            rightDataIterator != null
+                                    ? rightDataIterator.onNext(
+                                            data -> {
+                                                rightDataRef.get().add(data);
+                                            })
+                                    : StateFutureUtils.completedVoidFuture();
                     return leftLoadToMemFuture.thenCombine(
                             rightLoadToMemFuture,
                             (VOID1, VOID2) -> {
