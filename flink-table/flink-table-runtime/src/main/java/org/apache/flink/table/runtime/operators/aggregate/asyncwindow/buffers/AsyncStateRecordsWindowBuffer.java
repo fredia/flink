@@ -40,7 +40,9 @@ import javax.annotation.Nullable;
 
 import java.io.EOFException;
 import java.time.ZoneId;
+import java.util.ArrayList;
 import java.util.Iterator;
+import java.util.List;
 
 import static org.apache.flink.table.runtime.util.AsyncStateUtils.REUSABLE_VOID_STATE_FUTURE;
 import static org.apache.flink.table.runtime.util.TimeWindowUtil.isWindowFired;
@@ -126,20 +128,18 @@ public class AsyncStateRecordsWindowBuffer implements AsyncStateWindowBuffer {
         StateFuture<Void> flushFuture = REUSABLE_VOID_STATE_FUTURE;
         if (recordsBuffer.getNumKeys() > 0) {
             KeyValueIterator<WindowKey, Iterator<RowData>> entryIterator =
-                    recordsBuffer.getEntryIterator(requiresCopy);
+                    recordsBuffer.getEntryIterator(true);
             while (entryIterator.advanceNext()) {
                 WindowKey windowKey = entryIterator.getKey();
+                long window = windowKey.getWindow();
+                List<RowData> allData = itertorToList(entryIterator.getValue());
                 if (currentKey != null && keyEqualiser.equals(currentKey, windowKey.getKey())) {
-                    flushFuture =
-                            combineFunction.asyncCombine(
-                                    windowKey.getWindow(), entryIterator.getValue());
+                    flushFuture = combineFunction.asyncCombine(window, allData.iterator());
                 } else {
                     // no need to wait for combining the records excluding current key
                     keyContext.asyncProcessWithKey(
                             windowKey.getKey(),
-                            () ->
-                                    combineFunction.asyncCombine(
-                                            windowKey.getWindow(), entryIterator.getValue()));
+                            () -> combineFunction.asyncCombine(window, allData.iterator()));
                 }
             }
             recordsBuffer.reset();
@@ -147,6 +147,20 @@ public class AsyncStateRecordsWindowBuffer implements AsyncStateWindowBuffer {
             minSliceEnd = Long.MAX_VALUE;
         }
         return flushFuture;
+    }
+
+    /**
+     * Convert iterator to list.
+     *
+     * <p>This may put some pressure on heap memory since the data in the iterator comes from
+     * managed memory. We can optimize this method once we come up with a better approach.
+     */
+    private List<RowData> itertorToList(Iterator<RowData> records) {
+        List<RowData> list = new ArrayList<>();
+        while (records.hasNext()) {
+            list.add(records.next());
+        }
+        return list;
     }
 
     @Override

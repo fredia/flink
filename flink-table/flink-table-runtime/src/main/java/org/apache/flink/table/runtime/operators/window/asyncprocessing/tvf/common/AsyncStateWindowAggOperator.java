@@ -241,7 +241,9 @@ public class AsyncStateWindowAggOperator<K, W> extends AsyncStateTableStreamOper
 
     @Override
     public void prepareSnapshotPreBarrier(long checkpointId) throws Exception {
+        super.prepareSnapshotPreBarrier(checkpointId);
         windowProcessor.prepareCheckpoint();
+        drainStateRequests();
     }
 
     /** Context implementation for {@link WindowProcessor.Context}. */
