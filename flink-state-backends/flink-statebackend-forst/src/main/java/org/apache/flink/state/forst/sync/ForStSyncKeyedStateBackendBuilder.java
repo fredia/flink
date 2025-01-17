@@ -124,7 +124,7 @@ public class ForStSyncKeyedStateBackendBuilder<K> extends AbstractKeyedStateBack
     private final Path instanceBasePath;
 
     /** Path where this configured instance stores its RocksDB database. */
-    private final Path instanceForStDBPath;
+    // private final Path instanceForStDBPath;
 
     private final MetricGroup metricGroup;
     private final StateBackend.CustomInitializationMetrics customInitializationMetrics;
@@ -188,7 +188,7 @@ public class ForStSyncKeyedStateBackendBuilder<K> extends AbstractKeyedStateBack
         this.columnFamilyOptionsFactory = Preconditions.checkNotNull(columnFamilyOptionsFactory);
         this.optionsContainer = optionsContainer;
         this.instanceBasePath = instanceBasePath;
-        this.instanceForStDBPath = getInstanceRocksDBPath(instanceBasePath);
+        // this.instanceForStDBPath = getInstanceRocksDBPath(instanceBasePath);
         this.metricGroup = metricGroup;
         this.customInitializationMetrics = customInitializationMetrics;
         this.enableIncrementalCheckpointing = false;
@@ -303,7 +303,8 @@ public class ForStSyncKeyedStateBackendBuilder<K> extends AbstractKeyedStateBack
             UUID backendUID = UUID.randomUUID();
             SortedMap<Long, Collection<HandleAndLocalPath>> materializedSstFiles = new TreeMap<>();
             long lastCompletedCheckpointId = -1L;
-            prepareDirectories();
+            // prepareDirectories();
+            optionsContainer.prepareDirectories();
             restoreOperation =
                     getForStDBRestoreOperation(
                             keyGroupPrefixBytes,
@@ -390,7 +391,7 @@ public class ForStSyncKeyedStateBackendBuilder<K> extends AbstractKeyedStateBack
         }
         InternalKeyContext<K> keyContext =
                 new InternalKeyContextImpl<>(keyGroupRange, numberOfKeyGroups);
-        logger.info("Finished building RocksDB keyed state-backend at {}.", instanceBasePath);
+        logger.info("Finished building RocksDB keyed state-backend at {}.", optionsContainer.getRemoteBasePath());
         return new ForStSyncKeyedStateBackend<>(
                 this.userCodeClassLoader,
                 this.instanceBasePath,
@@ -497,10 +498,16 @@ public class ForStSyncKeyedStateBackendBuilder<K> extends AbstractKeyedStateBack
         // working dir. We will implement this in ForStDB later, but before that, we achieved this
         // by setting the dbPath to "/" when the dfs directory existed.
 
+        Path instanceForStPath =
+                              optionsContainer.getRemoteForStPath() == null
+                                      ? optionsContainer.getLocalForStPath()
+                                      : new Path("/db");
+
+
         if (CollectionUtil.isEmptyOrAllElementsNull(restoreStateHandles)) {
             return new ForStNoneRestoreOperation(
                     Collections.emptyMap(),
-                    instanceForStDBPath,
+                    instanceForStPath,
                     optionsContainer.getDbOptions(),
                     columnFamilyOptionsFactory,
                     nativeMetricOptions,
@@ -521,7 +528,7 @@ public class ForStSyncKeyedStateBackendBuilder<K> extends AbstractKeyedStateBack
                     keySerializerProvider,
                     optionsContainer,
                     optionsContainer.getBasePath(),
-                    instanceForStDBPath,
+                    instanceForStPath,
                     optionsContainer.getDbOptions(),
                     columnFamilyOptionsFactory,
                     nativeMetricOptions,
@@ -547,7 +554,7 @@ public class ForStSyncKeyedStateBackendBuilder<K> extends AbstractKeyedStateBack
                     registeredPQStates,
                     createHeapQueueFactory(),
                     keySerializerProvider,
-                    instanceForStDBPath,
+                    instanceForStPath,
                     optionsContainer.getDbOptions(),
                     columnFamilyOptionsFactory,
                     nativeMetricOptions,
@@ -599,15 +606,5 @@ public class ForStSyncKeyedStateBackendBuilder<K> extends AbstractKeyedStateBack
 
     private HeapPriorityQueueSetFactory createHeapQueueFactory() {
         return new HeapPriorityQueueSetFactory(keyGroupRange, numberOfKeyGroups, 128);
-    }
-
-    private void prepareDirectories() throws IOException {
-        File baseFile = new File(instanceBasePath.getPath());
-        checkAndCreateDirectory(baseFile);
-        if (new File(instanceForStDBPath.getPath()).exists()) {
-            // Clear the base directory when the backend is created
-            // in case something crashed and the backend never reached dispose()
-            FileUtils.deleteDirectory(baseFile);
-        }
     }
 }

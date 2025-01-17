@@ -453,6 +453,16 @@ public class ForStStateBackend extends AbstractManagedMemoryStateBackend
 
         lazyInitializeForJob(env, fileCompatibleIdentifier);
 
+        String opChildPath =
+                String.format(
+                        "op_%s_attempt_%s",
+                        fileCompatibleIdentifier, env.getTaskInfo().getAttemptNumber());
+
+        Path remoteBasePath =
+                remoteForStDirectory != null
+                        ? new Path(new Path(remoteForStDirectory, jobId.toHexString()), opChildPath)
+                        : null;
+
         Path instanceBasePath =
                 new Path(
                         new File(
@@ -482,7 +492,7 @@ public class ForStStateBackend extends AbstractManagedMemoryStateBackend
                 createOptionsAndResourceContainer(
                         sharedResources,
                         instanceBasePath,
-                        null,
+                        remoteBasePath,
                         nativeMetricOptions.isStatisticsEnabled());
 
         ExecutionConfig executionConfig = env.getExecutionConfig();
