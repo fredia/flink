@@ -18,17 +18,26 @@
 package org.apache.flink.streaming.api.operators.co;
 
 import org.apache.flink.api.common.functions.OpenContext;
+import org.apache.flink.api.common.typeinfo.TypeInformation;
+import org.apache.flink.runtime.asyncprocessing.operators.co.AsyncCoStreamFlatMap;
 import org.apache.flink.streaming.api.functions.co.CoFlatMapFunction;
 import org.apache.flink.streaming.api.functions.co.RichCoFlatMapFunction;
 import org.apache.flink.streaming.api.watermark.Watermark;
 import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
 import org.apache.flink.streaming.util.TestHarnessUtil;
 import org.apache.flink.streaming.util.TwoInputStreamOperatorTestHarness;
+import org.apache.flink.streaming.util.asyncprocessing.AsyncKeyedTwoInputStreamOperatorTestHarness;
+import org.apache.flink.testutils.junit.extensions.parameterized.Parameter;
+import org.apache.flink.testutils.junit.extensions.parameterized.ParameterizedTestExtension;
+import org.apache.flink.testutils.junit.extensions.parameterized.Parameters;
 import org.apache.flink.util.Collector;
 
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestTemplate;
+import org.junit.jupiter.api.extension.ExtendWith;
 
 import java.io.Serializable;
+import java.util.Arrays;
+import java.util.Collection;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -42,8 +51,16 @@ import static org.assertj.core.api.Assertions.assertThat;
  *   <li>Watermarks are correctly forwarded
  * </ul>
  */
+@ExtendWith(ParameterizedTestExtension.class)
 class CoStreamFlatMapTest implements Serializable {
     private static final long serialVersionUID = 1L;
+
+    @Parameters(name = "async = {0}")
+    private static Collection<Boolean> data() {
+        return Arrays.asList(true, false);
+    }
+
+    @Parameter private boolean enableAsyncState;
 
     private static final class MyCoFlatMap implements CoFlatMapFunction<String, Integer, String> {
         private static final long serialVersionUID = 1L;
@@ -61,17 +78,15 @@ class CoStreamFlatMapTest implements Serializable {
         }
     }
 
-    @Test
+    @TestTemplate
     void testCoFlatMap() throws Exception {
-        CoStreamFlatMap<String, Integer, String> operator =
-                new CoStreamFlatMap<String, Integer, String>(new MyCoFlatMap());
 
         TwoInputStreamOperatorTestHarness<String, Integer, String> testHarness =
-                new TwoInputStreamOperatorTestHarness<String, Integer, String>(operator);
+                getTestHarness(new MyCoFlatMap());
 
         long initialTime = 0L;
         ConcurrentLinkedQueue<Object> expectedOutput = new ConcurrentLinkedQueue<Object>();
-
+        testHarness.setup();
         testHarness.open();
 
         testHarness.processElement1(new StreamRecord<String>("abc", initialTime + 1));
@@ -107,16 +122,14 @@ class CoStreamFlatMapTest implements Serializable {
                 "Output was not correct.", expectedOutput, testHarness.getOutput());
     }
 
-    @Test
+    @TestTemplate
     void testOpenClose() throws Exception {
-        CoStreamFlatMap<String, Integer, String> operator =
-                new CoStreamFlatMap<String, Integer, String>(new TestOpenCloseCoFlatMapFunction());
-
         TwoInputStreamOperatorTestHarness<String, Integer, String> testHarness =
-                new TwoInputStreamOperatorTestHarness<String, Integer, String>(operator);
-
+                getTestHarness(new TestOpenCloseCoFlatMapFunction());
+        TestOpenCloseCoFlatMapFunction.closeCalled = false;
         long initialTime = 0L;
 
+        testHarness.setup();
         testHarness.open();
 
         testHarness.processElement1(new StreamRecord<String>("Hello", initialTime));
@@ -163,6 +176,27 @@ class CoStreamFlatMapTest implements Serializable {
         public void flatMap2(Integer value, Collector<String> out) throws Exception {
             assertThat(openCalled).as("Open was not called before run.").isTrue();
             out.collect(value.toString());
+        }
+    }
+
+    private TwoInputStreamOperatorTestHarness<String, Integer, String> getTestHarness(
+            CoFlatMapFunction<String, Integer, String> function) throws Exception {
+        if (enableAsyncState) {
+            AsyncCoStreamFlatMap<String, Integer, String> operator =
+                    new AsyncCoStreamFlatMap<String, Integer, String>(function);
+            AsyncKeyedTwoInputStreamOperatorTestHarness<String, String, Integer, String>
+                    testHarness =
+                            AsyncKeyedTwoInputStreamOperatorTestHarness.create(
+                                    operator,
+                                    x -> x,
+                                    x -> String.valueOf(x),
+                                    TypeInformation.of(String.class));
+            return testHarness;
+        } else {
+            CoStreamFlatMap<String, Integer, String> operator =
+                    new CoStreamFlatMap<String, Integer, String>(function);
+
+            return new TwoInputStreamOperatorTestHarness<String, Integer, String>(operator);
         }
     }
 }

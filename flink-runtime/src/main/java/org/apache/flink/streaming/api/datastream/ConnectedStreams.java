@@ -26,6 +26,7 @@ import org.apache.flink.api.common.typeinfo.PrimitiveArrayTypeInfo;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.api.java.functions.KeySelector;
 import org.apache.flink.api.java.typeutils.TypeExtractor;
+import org.apache.flink.runtime.asyncprocessing.operators.co.AsyncCoStreamFlatMap;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.api.functions.co.CoFlatMapFunction;
 import org.apache.flink.streaming.api.functions.co.CoMapFunction;
@@ -316,8 +317,11 @@ public class ConnectedStreams<IN1, IN2> {
      */
     public <R> SingleOutputStreamOperator<R> flatMap(
             CoFlatMapFunction<IN1, IN2, R> coFlatMapper, TypeInformation<R> outputType) {
-        return transform(
-                "Co-Flat Map", outputType, new CoStreamFlatMap<>(inputStream1.clean(coFlatMapper)));
+        TwoInputStreamOperator<IN1, IN2, R> operator =
+                isEnableAsyncState()
+                        ? new AsyncCoStreamFlatMap<>(inputStream1.clean(coFlatMapper))
+                        : new CoStreamFlatMap<>(inputStream1.clean(coFlatMapper));
+        return transform("Co-Flat Map", outputType, operator);
     }
 
     /**
@@ -522,5 +526,15 @@ public class ConnectedStreams<IN1, IN2> {
         getExecutionEnvironment().addOperator(transform);
 
         return returnStream;
+    }
+
+    private boolean isEnableAsyncState() {
+        boolean enableAsyncState = false;
+        if ((inputStream1 instanceof KeyedStream) && (inputStream2 instanceof KeyedStream)) {
+            enableAsyncState =
+                    ((KeyedStream<?, ?>) inputStream1).isEnableAsyncState()
+                            && ((KeyedStream<?, ?>) inputStream2).isEnableAsyncState();
+        }
+        return enableAsyncState;
     }
 }
